@@ -16,20 +16,20 @@ One `updater.json` file is needed for each mod and the format looks like:
 ```JSON
 {
 	"Version": "1.1.8",
-	"RemotePath": "bin",
+	"RemoteRelativePath": "bin",
 	"UpdateNotes": "Minor bug fixes",
 	"StoreBackup": true,
 	"Dependencies":
 	[
 		{
 			"Filename": "Si_AdminExtension.dll",
-			"RemoteURL": "https://raw.githubusercontent.com/data-bomb/Silica_ListenServer/main/Si_AdminExtension/bin",
+			"RemoteFullPath": "https://raw.githubusercontent.com/data-bomb/Silica_ListenServer/main/Si_AdminExtension/bin",
 			"LocalPath": "MelonLoader\\net6",
 			"ForceUpdate": false
 		},
 		{
 			"Filename": "LICENSE",
-			"RemoteURL": "https://raw.githubusercontent.com/data-bomb/Silica_ListenServer/main",
+			"RemoteFullPath": "https://raw.githubusercontent.com/data-bomb/Silica_ListenServer/main",
 			"LocalPath": "Mods",
 			"ForceUpdate": false
 		}
