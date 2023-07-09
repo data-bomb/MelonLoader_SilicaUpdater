@@ -32,7 +32,7 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.4", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.5", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -207,6 +207,30 @@ namespace UniversalUpdater
             return thisUpdater;
         }
 
+        static void MakeModBackup(FileInfo theMod, Version theVersion)
+        {
+            String backupDirectory = System.IO.Path.Combine(MelonEnvironment.ModsDirectory, @"backup\");
+            if (!System.IO.Directory.Exists(backupDirectory))
+            {
+                MelonLogger.Msg("Creating backup directory at: " + backupDirectory);
+                System.IO.Directory.CreateDirectory(backupDirectory);
+            }
+
+            MelonLogger.Msg("Moving " + theMod.Name + " to backup directory");
+            String backupFilePath = Path.Combine(backupDirectory, theMod.Name);
+            if (System.IO.File.Exists(backupFilePath))
+            {
+                if (ShouldOverwriteBackup(backupFilePath, theVersion))
+                {
+                    System.IO.File.Move(theMod.FullName, backupFilePath, true);
+                }
+            }
+            else
+            {
+                System.IO.File.Move(theMod.FullName, backupFilePath);
+            }
+        }
+
         // iterate through mod files
         public override void OnPreInitialization() 
         {
@@ -249,9 +273,9 @@ namespace UniversalUpdater
                         continue;
                     }
 
-                    //MelonLogger.Msg(modAttributes.Namespace + "." + modAttributes.Class + " " + modAttributes.Attr.Name + " " + modAttributes.Attr.Version + " " + modAttributes.Attr.Author + " " + modAttributes.Attr.DownloadLink);
+                    MelonLogger.Msg(modAttributes.Namespace + "." + modAttributes.Class + " " + modAttributes.Attr.Name + " " + modAttributes.Attr.Version + " " + modAttributes.Attr.Author + " " + modAttributes.Attr.DownloadLink);
 
-                    // attempt to see if there is an update
+                    // attempt to grab the deserialized json
                     UpdaterEntry? thisUpdater = GetUpdaterEntry(updaterClient, modAttributes.Attr.DownloadLink, modAttributes.Namespace);
                     if (thisUpdater == null)
                     {
@@ -259,56 +283,40 @@ namespace UniversalUpdater
                         continue;
                     }
 
-                    // compare the two versions
                     Version updaterVersion = new(thisUpdater.Version);
                     Version currentVersion = new(modAttributes.Attr.Version);
-                    // is the updater version higher
-                    if (IsNewerVersion(currentVersion, updaterVersion))
+                    // do we already have the latest version?
+                    if (!IsNewerVersion(currentVersion, updaterVersion))
                     {
-                        MelonLogger.Msg("Updating " + thisMod.Name + "...");
-                        if (thisUpdater.UpdateNotes != null && thisUpdater.UpdateNotes.Length > 0)
-                        {
-                            MelonLogger.Msg(thisMod.Name + " Patch Notes- " + thisUpdater.UpdateNotes);
-                        }
-
-                        if (thisUpdater.StoreBackup)
-                        {
-                            String backupDirectory = System.IO.Path.Combine(MelonEnvironment.ModsDirectory, @"backup\");
-                            if (!System.IO.Directory.Exists(backupDirectory))
-                            {
-                                MelonLogger.Msg("Creating backup directory at: " + backupDirectory);
-                                System.IO.Directory.CreateDirectory(backupDirectory);
-                            }
-
-                            MelonLogger.Msg("Moving " + thisMod.Name + " to backup directory");
-                            String backupFilePath = Path.Combine(backupDirectory, thisMod.Name);
-                            if (System.IO.File.Exists(backupFilePath))
-                            {
-                                if (ShouldOverwriteBackup(backupFilePath, currentVersion))
-                                {
-                                    System.IO.File.Move(thisMod.FullName, backupFilePath, true);
-                                }
-                            }
-                            else
-                            {
-                                System.IO.File.Move(thisMod.FullName, backupFilePath);
-                            }
-                        }
-
-                        // download new and replace
-                        String binaryPath = "/" + thisUpdater.RemotePath + "/" + thisMod.Name;
-                        String fileURL = FormatURLString(modAttributes.Attr.DownloadLink, modAttributes.Namespace, binaryPath);
-                        MelonLogger.Msg(fileURL);
-
-                        Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
-                        FileStream fileStream = new(thisMod.FullName, FileMode.Create);
-                        downloadStream.CopyTo(fileStream);
-
-                        MelonLogger.Msg("Update for " + thisMod.Name + " complete.");
-
-                        // TODO: deal with dependencies
+                        MelonLogger.Msg("Skipping " + thisMod.Name + " due to already having latest version");
+                        continue;
                     }
-                }
+
+                    MelonLogger.Msg("Updating " + thisMod.Name + "...");
+
+                    if (thisUpdater.UpdateNotes != null && thisUpdater.UpdateNotes.Length > 0)
+                    {
+                        MelonLogger.Msg(thisMod.Name + " Patch Notes- " + thisUpdater.UpdateNotes);
+                    }
+
+                    if (thisUpdater.StoreBackup)
+                    {
+                        MakeModBackup(thisMod, currentVersion);
+                    }
+
+                    // download new and replace
+                    String binaryPath = "/" + thisUpdater.RemotePath + "/" + thisMod.Name;
+                    String fileURL = FormatURLString(modAttributes.Attr.DownloadLink, modAttributes.Namespace, binaryPath);
+                    MelonLogger.Msg(fileURL);
+
+                    Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
+                    FileStream fileStream = new(thisMod.FullName, FileMode.Create);
+                    downloadStream.CopyTo(fileStream);
+
+                    MelonLogger.Msg("Update for " + thisMod.Name + " complete.");
+
+                    // TODO: deal with dependencies
+                    }
 
                 updaterClient.Dispose();
             }
