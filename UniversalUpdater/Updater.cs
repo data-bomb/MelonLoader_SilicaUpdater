@@ -30,7 +30,7 @@ using UniversalUpdater;
 using System.Reflection;
 using Mono.Cecil;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.0.2", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.0", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -88,22 +88,54 @@ namespace UniversalUpdater
             }
         }
 
-        static MelonInfoAttribute? GetMelonModAttributes(String fullModFilePath)
+        public class MelonInfoAttributeExtended
         {
-            AssemblyDefinition currentAssemblyDefinition = AssemblyDefinition.ReadAssembly(fullModFilePath);
-            CustomAttribute? currentCustomAttribute = currentAssemblyDefinition.CustomAttributes.First(k => k.AttributeType.FullName == "MelonLoader.MelonInfoAttribute");
-            MelonInfoAttribute currentMelonModInfoAttribute = null;
-
-            if (currentCustomAttribute != null)
+            #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+            public MelonInfoAttribute Attr
+            #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
             {
-                currentMelonModInfoAttribute = new(currentCustomAttribute.ConstructorArguments[0].GetType(),
-                                                   (String)currentCustomAttribute.ConstructorArguments[1].Value,
-                                                   (String)currentCustomAttribute.ConstructorArguments[2].Value,
-                                                   (String)currentCustomAttribute.ConstructorArguments[3].Value,
-                                                   (String)currentCustomAttribute.ConstructorArguments[4].Value);
+                get;
+                set;
+            }
+            public String? Namespace
+            {
+                get;
+                set;
+            }
+            public String? Class
+            {
+                get;
+                set;
+            }
+        }
+
+        // there are 4 required parameters and 1 optional parameter
+        // https://melonwiki.xyz/#/modders/attributes
+        // type isn't available yet so extend to add 2 optional parameters for namespace and class
+        static MelonInfoAttributeExtended? GetMelonModAttributes(String fullModFilePath)
+        {
+            AssemblyDefinition assemblyDefinition = AssemblyDefinition.ReadAssembly(fullModFilePath);
+            CustomAttribute? customAttribute = assemblyDefinition.CustomAttributes.First(k => k.AttributeType.FullName == "MelonLoader.MelonInfoAttribute");
+            
+            if (customAttribute != null)
+            {
+                MelonInfoAttribute attributesOriginal = new(customAttribute.ConstructorArguments[0].Value.GetType(),
+                                                            (String)customAttribute.ConstructorArguments[1].Value,
+                                                            (String)customAttribute.ConstructorArguments[2].Value,
+                                                            (String)customAttribute.ConstructorArguments[3].Value,
+                                                            (String)customAttribute.ConstructorArguments[4].Value);
+
+                MelonInfoAttributeExtended attributesExtended = new()
+                {
+                    Attr = attributesOriginal,
+                    Namespace = customAttribute.ConstructorArguments[0].Value.ToString().Split('.')[0],
+                    Class = customAttribute.ConstructorArguments[0].Value.ToString().Split('.')[1]
+                };
+
+                return attributesExtended;
             }
 
-            return currentMelonModInfoAttribute;
+            return null;
         }
 
         // iterate through mod files
@@ -122,161 +154,108 @@ namespace UniversalUpdater
                 {
                     FileInfo thisMod = modFiles[i];
 
-                    // read assembly info without loading it
-                    MelonInfoAttribute? modAttributes = GetMelonModAttributes(thisMod.FullName);
-                    
-                    String modFilePath = Path.Combine(modsPath, thisMod.Name);
-                    byte[] byteBuffer = System.IO.File.ReadAllBytes(modFilePath);
-                    string byteBufferAsString = System.Text.Encoding.UTF8.GetString(byteBuffer);
-                    Int32 wrapOffset = byteBufferAsString.IndexOf("WrapNonExceptionThrows");
-                    int typeOffset = 0;
-
-                    if (wrapOffset != -1)
+                    // read assembly info without loading the mod
+                    MelonInfoAttributeExtended? modAttributes = GetMelonModAttributes(thisMod.FullName);
+                    if (modAttributes == null)
                     {
-                        // align on first 'W'?
-                        for (int j = wrapOffset; j < byteBuffer.Length; j++)
-                        {
-                            // "W" 
-                            if (byteBuffer[j] == 87)
-                            {
-                                wrapOffset = j;
-                                break;
-                            }
-                        }
-                        // add the length of the string plus offset to find start of assembly info
-                        typeOffset = wrapOffset + 36;
-                        // we're still off by one in many cases so let's try and find another reference in the backwards direction
-                        for (int j = typeOffset; j > 0; j--)
-                        {
-                            if (byteBuffer[j] == 0)
-                            {
-                                typeOffset = j + 1;
-                                break;
-                            }
-                        }
-
-                        // there are 4 required parameters and 1 optional parameter
-                        // https://melonwiki.xyz/#/modders/attributes
-
-                        // type (required)
-                        int size = byteBuffer[typeOffset];
-                        String type = System.Text.Encoding.UTF8.GetString(byteBuffer, typeOffset + 1, size);
-
-                        // name (required)
-                        int nameOffset = typeOffset + 1 + size;
-                        size = byteBuffer[nameOffset];
-                        String name = System.Text.Encoding.UTF8.GetString(byteBuffer, nameOffset + 1, size);
-
-                        // version (required)
-                        int versionOffset = nameOffset + 1 + size;
-                        size = byteBuffer[versionOffset];
-                        String version = System.Text.Encoding.UTF8.GetString(byteBuffer, versionOffset + 1, size);
-
-                        // author (required)
-                        int authorOffset = versionOffset + 1 + size;
-                        size = byteBuffer[authorOffset];
-                        String author = System.Text.Encoding.UTF8.GetString(byteBuffer, authorOffset + 1, size);
-
-                        // downloadLink (optional)
-                        int downloadOffset = authorOffset + 1 + size;
-                        size = byteBuffer[downloadOffset];
-
-                        // check if optional downloadLink was included
-                        // 0xFF = NOT included
-                        if (size != 255)
-                        {
-                            String downloadLink = System.Text.Encoding.UTF8.GetString(byteBuffer, downloadOffset + 1, size);
-                            MelonLogger.Msg(type + " " + name + " " + version + " " + author + " " + downloadLink);
-
-                            // attempt to see if there is an update
-
-                            // build URL
-                            String modURL = type.Split('.')[0];
-                            String updaterText = "";
-
-                            if (downloadLink.StartsWith("http"))
-                            {
-                                String updateURL = "";
-                                try
-                                {
-                                    // check for GitHub and translate to raw URL
-                                    if (downloadLink.StartsWith("https://github.com/"))
-                                    {
-                                        String githubAccount = downloadLink.Split('/')[3];
-                                        String githubRepo = downloadLink.Split('/')[4];
-                                        updateURL = "https://raw.githubusercontent.com/" + githubAccount + "/" + githubRepo + "/main/" + modURL + "/updater.json";
-                                    }
-                                    else
-                                    {
-                                        updateURL = downloadLink + "/" + modURL + "/updater.json";
-                                    }
-
-                                    MelonLogger.Msg(updateURL);
-
-                                    updaterText = updaterClient.GetStringAsync(updateURL).Result;
-                                }
-                                catch
-                                {
-                                    MelonLogger.Msg("Updater not found for " + thisMod.Name);
-                                }
-
-                                MelonLogger.Msg(updaterText);
-                                UpdaterEntry? thisUpdater = JsonConvert.DeserializeObject<UpdaterEntry>(updaterText);
-
-                                if (thisUpdater == null)
-                                {
-                                    MelonLogger.Msg("Skipping " + thisMod.Name + " due to json object corruption");
-                                    continue;
-                                }
-
-                                // compare the two versions
-                                Version thisVersion = new(thisUpdater.Version);
-                                Version currentVersion = new(version);
-                                // is the updater version higher
-                                if (currentVersion.CompareTo(thisVersion) < 0)
-                                {
-                                    MelonLogger.Msg("Updating " + thisMod.Name + "...");
-                                    if (thisUpdater.UpdateNotes != null && thisUpdater.UpdateNotes.Length > 0)
-                                    {
-                                        MelonLogger.Msg(thisMod.Name + " Patch Notes- " + thisUpdater.UpdateNotes);
-                                    }
-
-                                    if (thisUpdater.StoreBackup)
-                                    {
-                                        String backupDirectory = System.IO.Path.Combine(MelonEnvironment.ModsDirectory, @"backup\");
-                                        if (!System.IO.Directory.Exists(backupDirectory))
-                                        {
-                                            MelonLogger.Msg("Creating backup directory at: " + backupDirectory);
-                                            System.IO.Directory.CreateDirectory(backupDirectory);
-                                        }
-
-                                        MelonLogger.Msg("Moving " + thisMod.Name + " to backup directory");
-                                        String backupFilePath = Path.Combine(backupDirectory, thisMod.Name);
-                                        System.IO.File.Move(modFilePath, backupFilePath);
-                                    }
-
-                                    // download new and replace
-                                    String fileURL = updateURL.Remove(updateURL.Length - 13);
-                                    fileURL = fileURL + "/bin/" + thisMod.Name;
-                                    MelonLogger.Msg(fileURL);
-                                    Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
-                                    FileStream fileStream = new(modFilePath, FileMode.Create);
-                                    downloadStream.CopyTo(fileStream);
-
-                                    MelonLogger.Msg("Update for " + thisMod.Name + " complete.");
-
-                                    // TODO: deal with dependencies
-                                }
-                            }
-                            else
-                            {
-                                MelonLogger.Msg("Download URL invalid for " + thisMod.Name);
-                            }
-                        }
+                        MelonLogger.Warning("Could not find MelonMod attributes for " + thisMod.Name);
+                        continue;
                     }
-                }
 
-                updaterClient.Dispose();
+                    if (modAttributes.Attr.DownloadLink == null)
+                    {
+                        MelonLogger.Msg("No download URL found for " + thisMod.Name);
+                        continue;
+                    }
+
+                    if (!modAttributes.Attr.DownloadLink.StartsWith("http"))
+                    {
+                        MelonLogger.Warning("Invalid URL found for " + thisMod.Name);
+                        continue;
+                    }
+
+                    //MelonLogger.Msg(modAttributes.Namespace + "." + modAttributes.Class + " " + modAttributes.Attr.Name + " " + modAttributes.Attr.Version + " " + modAttributes.Attr.Author + " " + modAttributes.Attr.DownloadLink);
+
+                    // attempt to see if there is an update
+
+                    // build URL
+                    String modURL = modAttributes.Namespace;
+                    String updaterText = "";
+
+                    String updateURL = "";
+                    try
+                    {
+                        // check for GitHub and translate to raw URL
+                        if (modAttributes.Attr.DownloadLink.StartsWith("https://github.com/"))
+                        {
+                            String githubAccount = modAttributes.Attr.DownloadLink.Split('/')[3];
+                            String githubRepo = modAttributes.Attr.DownloadLink.Split('/')[4];
+                            updateURL = "https://raw.githubusercontent.com/" + githubAccount + "/" + githubRepo + "/main/" + modURL + "/updater.json";
+                        }
+                        else
+                        {
+                            updateURL = modAttributes.Attr.DownloadLink + "/" + modURL + "/updater.json";
+                        }
+
+                        MelonLogger.Msg(updateURL);
+
+                        updaterText = updaterClient.GetStringAsync(updateURL).Result;
+                    }
+                    catch
+                    {
+                        MelonLogger.Msg("Updater not found for " + thisMod.Name);
+                    }
+
+                    MelonLogger.Msg(updaterText);
+                    UpdaterEntry? thisUpdater = JsonConvert.DeserializeObject<UpdaterEntry>(updaterText);
+
+                    if (thisUpdater == null)
+                    {
+                        MelonLogger.Msg("Skipping " + thisMod.Name + " due to json object corruption");
+                        continue;
+                    }
+
+                    // compare the two versions
+                    Version thisVersion = new(thisUpdater.Version);
+                    Version currentVersion = new(modAttributes.Attr.Version);
+                    // is the updater version higher
+                    if (currentVersion.CompareTo(thisVersion) < 0)
+                    {
+                        MelonLogger.Msg("Updating " + thisMod.Name + "...");
+                        if (thisUpdater.UpdateNotes != null && thisUpdater.UpdateNotes.Length > 0)
+                        {
+                            MelonLogger.Msg(thisMod.Name + " Patch Notes- " + thisUpdater.UpdateNotes);
+                        }
+
+                        if (thisUpdater.StoreBackup)
+                        {
+                            String backupDirectory = System.IO.Path.Combine(MelonEnvironment.ModsDirectory, @"backup\");
+                            if (!System.IO.Directory.Exists(backupDirectory))
+                            {
+                                MelonLogger.Msg("Creating backup directory at: " + backupDirectory);
+                                System.IO.Directory.CreateDirectory(backupDirectory);
+                            }
+
+                            MelonLogger.Msg("Moving " + thisMod.Name + " to backup directory");
+                            String backupFilePath = Path.Combine(backupDirectory, thisMod.Name);
+                            System.IO.File.Move(thisMod.FullName, backupFilePath);
+                        }
+
+                        // download new and replace
+                        String fileURL = updateURL.Remove(updateURL.Length - 13);
+                        fileURL = fileURL + "/bin/" + thisMod.Name;
+                        MelonLogger.Msg(fileURL);
+                        Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
+                        FileStream fileStream = new(thisMod.FullName, FileMode.Create);
+                        downloadStream.CopyTo(fileStream);
+
+                        MelonLogger.Msg("Update for " + thisMod.Name + " complete.");
+
+                        // TODO: deal with dependencies
+                    }
+
+                    updaterClient.Dispose();
+                }
             }
             catch (Exception ex)
             {
