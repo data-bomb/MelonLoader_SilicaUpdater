@@ -23,16 +23,14 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using HarmonyLib;
-using Il2Cpp;
 using MelonLoader;
 using Newtonsoft.Json;
 using MelonLoader.Utils;
-using System.Net;
-using UnityEngine;
 using UniversalUpdater;
+using System.Reflection;
+using Mono.Cecil;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.0.1", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.0.2", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -42,7 +40,9 @@ namespace UniversalUpdater
         
         public class UpdaterEntry
         {
+            #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
             public String Version
+            #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
             {
                 get;
                 set;
@@ -88,6 +88,24 @@ namespace UniversalUpdater
             }
         }
 
+        static MelonInfoAttribute? GetMelonModAttributes(String fullModFilePath)
+        {
+            AssemblyDefinition currentAssemblyDefinition = AssemblyDefinition.ReadAssembly(fullModFilePath);
+            CustomAttribute? currentCustomAttribute = currentAssemblyDefinition.CustomAttributes.First(k => k.AttributeType.FullName == "MelonLoader.MelonInfoAttribute");
+            MelonInfoAttribute currentMelonModInfoAttribute = null;
+
+            if (currentCustomAttribute != null)
+            {
+                currentMelonModInfoAttribute = new(currentCustomAttribute.ConstructorArguments[0].GetType(),
+                                                   (String)currentCustomAttribute.ConstructorArguments[1].Value,
+                                                   (String)currentCustomAttribute.ConstructorArguments[2].Value,
+                                                   (String)currentCustomAttribute.ConstructorArguments[3].Value,
+                                                   (String)currentCustomAttribute.ConstructorArguments[4].Value);
+            }
+
+            return currentMelonModInfoAttribute;
+        }
+
         // iterate through mod files
         public override void OnPreInitialization() 
         {
@@ -103,6 +121,10 @@ namespace UniversalUpdater
                 for (int i = 0; i < modFiles.Length; i++)
                 {
                     FileInfo thisMod = modFiles[i];
+
+                    // read assembly info without loading it
+                    MelonInfoAttribute? modAttributes = GetMelonModAttributes(thisMod.FullName);
+                    
                     String modFilePath = Path.Combine(modsPath, thisMod.Name);
                     byte[] byteBuffer = System.IO.File.ReadAllBytes(modFilePath);
                     string byteBufferAsString = System.Text.Encoding.UTF8.GetString(byteBuffer);
