@@ -32,7 +32,7 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.7", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.2.0", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -40,55 +40,25 @@ namespace UniversalUpdater
     public class Updater : MelonPlugin
     {
 
+
+
         public class UpdaterEntry
         {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-            public String Version
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-            {
-                get;
-                set;
-            }
-            public String? RemotePath
-            {
-                get;
-                set;
-            }
-            public String? UpdateNotes
-            {
-                get;
-                set;
-            }
-            public bool StoreBackup
-            {
-                get;
-                set;
-            }
-            public DependencyEntry[]? DependencyEntries
-            {
-                get;
-                set;
-            }
+            public string Version { get; set; }
+            public string RemotePath { get; set; }
+            public string? UpdateNotes { get; set; }
+            public bool StoreBackup { get; set; }
+            public Dependency[] Dependencies { get; set; }
         }
 
-        public class DependencyEntry
+        public class Dependency
         {
-            public String? RemoteURL
-            {
-                get;
-                set;
-            }
-            public String? LocalPath
-            {
-                get;
-                set;
-            }
-            public bool ForceUpdate
-            {
-                get;
-                set;
-            }
+            public string Filename { get; set; }
+            public string RemoteURL { get; set; }
+            public string LocalPath { get; set; }
+            public bool ForceUpdate { get; set; }
         }
+
 
         public class MelonInfoAttributeExtended
         {
@@ -215,12 +185,12 @@ namespace UniversalUpdater
             FileStream fileStream = new(theFile.FullName, FileMode.Create);
             downloadStream.CopyTo(fileStream);
 
-            MelonLogger.Msg("Update for " + theFile.Name + " complete.");
+            MelonLogger.Msg("Download of " + theFile.Name + " complete.");
         }
 
         static void MakeModBackup(FileInfo theMod, Version theVersion)
         {
-            String backupDirectory = System.IO.Path.Combine(MelonEnvironment.ModsDirectory, @"backup\");
+            String backupDirectory = Path.Combine(MelonEnvironment.ModsDirectory, @"backup\");
             if (!System.IO.Directory.Exists(backupDirectory))
             {
                 MelonLogger.Msg("Creating backup directory at: " + backupDirectory);
@@ -243,7 +213,7 @@ namespace UniversalUpdater
         }
 
         // iterate through mod files
-        public override void OnPreInitialization() 
+        public override void OnPreInitialization()
         {
             try
             {
@@ -319,10 +289,27 @@ namespace UniversalUpdater
                     String binaryPath = $"{thisUpdater.RemotePath}/{thisMod.Name}";
                     String fileURL = FormatURLString(modAttributes.Attr.DownloadLink, modAttributes.Namespace, binaryPath);
                     DownloadFile(updaterClient, fileURL, thisMod);
-
-                    // TODO: deal with dependencies
-
+                    
+                    if (thisUpdater.Dependencies == null)
+                    {
+                        continue;
                     }
+
+                    // walk dependencies
+                    foreach (Dependency dependency in thisUpdater.Dependencies)
+                    {
+                        String dependencyFile = Path.GetFullPath(Path.Combine(MelonEnvironment.GameRootDirectory, dependency.LocalPath, dependency.Filename));
+                        MelonLogger.Msg("Found dependency: " + dependencyFile);
+
+                        bool dependencyExists = File.Exists(dependencyFile);
+                        if (!dependencyExists || (dependencyExists && dependency.ForceUpdate))
+                        {
+                            String dependencyURL = $"{dependency.RemoteURL}/{dependency.Filename}";
+                            FileInfo dependencyFileInfo = new FileInfo(dependencyFile);
+                            DownloadFile(updaterClient, dependencyURL, dependencyFileInfo);
+                        }
+                    }
+                }
 
                 updaterClient.Dispose();
             }
