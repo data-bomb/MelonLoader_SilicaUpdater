@@ -4,16 +4,14 @@ A universal updater plugin for MelonLoader
 Checks each DLL in the Game\Mods\ directory to see if it's outdated and automatically downloads new mod files, if needed.
 
 ### Prequisites
-- Each plugin using the updater needs to have the assembly info populated first
+- Each plugin using the updater needs to have the optional downloadLink parameter specified in the assembly info
 (e.g., `[assembly: MelonInfo(typeof(SurrenderCommand), "[Si] Surrender Command", "1.1.8", "databomb", "https://github.com/data-bomb/Silica_ListenServer")]`)
-- The optional downloadLink parameter must be specified with the URL of where the updater.json file and the DLL will reside
 - If a GitHub address is used as the downloadLink it should be of the format `https://github.com/<username>/<repo>`
 
-For GitHub URLs, the mod will check for the updater.json at `https://raw.githubusercontent.com/<username>/<repo>/main/<mod namespace>/updater.json`
+For GitHub URLs, the mod will check for the updater.json at `https://raw.githubusercontent.com/<username>/<repo>/main/<namespace>/updater.json`
+For non-GitHub URLs, the mod will check for the updater.json at `https://yourdownloadlink.com/yoursubpath/<namespace>/updater.json`
 
-For non-GitHub URLs, the mod will check for the updater.json at `https://yourdownloadlink.com/yoursubpath/<mod namespace>/updater.json`
-
-The `updater.json` files are of the format:
+One `updater.json` file is needed for each mod and the format looks like:
 ```JSON
 {
 	"Version": "1.1.8",
