@@ -29,8 +29,10 @@ using MelonLoader.Utils;
 using UniversalUpdater;
 using System.Reflection;
 using Mono.Cecil;
+using System.Net.Http.Headers;
+using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.0", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.1", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -149,6 +151,12 @@ namespace UniversalUpdater
 
                 HttpClient updaterClient = new();
                 updaterClient.DefaultRequestHeaders.Add("User-Agent", "MelonUpdater");
+                updaterClient.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue
+                {
+                    NoCache = true,
+                    Private = true,
+                    NoStore = true
+                };
 
                 for (int i = 0; i < modFiles.Length; i++)
                 {
