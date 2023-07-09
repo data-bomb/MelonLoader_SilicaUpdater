@@ -32,7 +32,7 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.2", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.3", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -118,6 +118,7 @@ namespace UniversalUpdater
         {
             AssemblyDefinition assemblyDefinition = AssemblyDefinition.ReadAssembly(fullModFilePath);
             CustomAttribute? customAttribute = assemblyDefinition.CustomAttributes.First(k => k.AttributeType.FullName == "MelonLoader.MelonInfoAttribute");
+            assemblyDefinition.Dispose();
 
             if (customAttribute != null)
             {
