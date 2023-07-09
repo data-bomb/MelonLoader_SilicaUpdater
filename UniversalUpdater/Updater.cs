@@ -32,7 +32,7 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.6", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.7", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -175,11 +175,11 @@ namespace UniversalUpdater
             {
                 String githubAccount = downloadLink.Split('/')[3];
                 String githubRepo = downloadLink.Split('/')[4];
-                return "https://raw.githubusercontent.com/" + githubAccount + "/" + githubRepo + "/main/" + modNamespace + subPath;
+                return $"https://raw.githubusercontent.com/{githubAccount}/{githubRepo}/main/{modNamespace}/{subPath}";
             }
             else
             {
-                return downloadLink + "/" + modNamespace + subPath;
+                return $"{downloadLink}/{modNamespace}/{subPath}";
             }
         }
 
@@ -188,7 +188,7 @@ namespace UniversalUpdater
             String updaterText = "";
 
             // build URL
-            String updateURL = FormatURLString(downloadLink, modNamespace, "/updater.json");
+            String updateURL = FormatURLString(downloadLink, modNamespace, "updater.json");
             MelonLogger.Msg(updateURL);
 
             try
@@ -316,7 +316,7 @@ namespace UniversalUpdater
                     }
 
                     // download new and replace
-                    String binaryPath = "/" + thisUpdater.RemotePath + "/" + thisMod.Name;
+                    String binaryPath = $"{thisUpdater.RemotePath}/{thisMod.Name}";
                     String fileURL = FormatURLString(modAttributes.Attr.DownloadLink, modAttributes.Namespace, binaryPath);
                     DownloadFile(updaterClient, fileURL, thisMod);
 
