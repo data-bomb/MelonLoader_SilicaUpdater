@@ -32,19 +32,19 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.3", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.4", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
 {
     public class Updater : MelonPlugin
     {
-        
+
         public class UpdaterEntry
         {
-            #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
             public String Version
-            #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
             {
                 get;
                 set;
@@ -92,9 +92,9 @@ namespace UniversalUpdater
 
         public class MelonInfoAttributeExtended
         {
-            #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
             public MelonInfoAttribute Attr
-            #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
             {
                 get;
                 set;
@@ -168,6 +168,45 @@ namespace UniversalUpdater
             return false;
         }
 
+        static String FormatURLString(String downloadLink, String modNamespace, String subPath)
+        {
+            // check for GitHub and translate to raw URL
+            if (downloadLink.StartsWith("https://github.com/"))
+            {
+                String githubAccount = downloadLink.Split('/')[3];
+                String githubRepo = downloadLink.Split('/')[4];
+                return "https://raw.githubusercontent.com/" + githubAccount + "/" + githubRepo + "/main/" + modNamespace + subPath;
+            }
+            else
+            {
+                return downloadLink + "/" + modNamespace + subPath;
+            }
+        }
+
+        static UpdaterEntry? GetUpdaterEntry(HttpClient updaterClient, String downloadLink, String modNamespace)
+        {
+            String updaterText = "";
+
+            // build URL
+            String updateURL = FormatURLString(downloadLink, modNamespace, "/updater.json");
+            MelonLogger.Msg(updateURL);
+
+            try
+            {
+                updaterText = updaterClient.GetStringAsync(updateURL).Result;
+            }
+            catch
+            {
+                MelonLogger.Msg("Updater not found for " + modNamespace);
+                return null;
+            }
+
+            MelonLogger.Msg(updaterText);
+            UpdaterEntry? thisUpdater = JsonConvert.DeserializeObject<UpdaterEntry>(updaterText);
+
+            return thisUpdater;
+        }
+
         // iterate through mod files
         public override void OnPreInitialization() 
         {
@@ -213,38 +252,7 @@ namespace UniversalUpdater
                     //MelonLogger.Msg(modAttributes.Namespace + "." + modAttributes.Class + " " + modAttributes.Attr.Name + " " + modAttributes.Attr.Version + " " + modAttributes.Attr.Author + " " + modAttributes.Attr.DownloadLink);
 
                     // attempt to see if there is an update
-
-                    // build URL
-                    String modURL = modAttributes.Namespace;
-                    String updaterText = "";
-
-                    String updateURL = "";
-                    try
-                    {
-                        // check for GitHub and translate to raw URL
-                        if (modAttributes.Attr.DownloadLink.StartsWith("https://github.com/"))
-                        {
-                            String githubAccount = modAttributes.Attr.DownloadLink.Split('/')[3];
-                            String githubRepo = modAttributes.Attr.DownloadLink.Split('/')[4];
-                            updateURL = "https://raw.githubusercontent.com/" + githubAccount + "/" + githubRepo + "/main/" + modURL + "/updater.json";
-                        }
-                        else
-                        {
-                            updateURL = modAttributes.Attr.DownloadLink + "/" + modURL + "/updater.json";
-                        }
-
-                        MelonLogger.Msg(updateURL);
-
-                        updaterText = updaterClient.GetStringAsync(updateURL).Result;
-                    }
-                    catch
-                    {
-                        MelonLogger.Msg("Updater not found for " + thisMod.Name);
-                    }
-
-                    MelonLogger.Msg(updaterText);
-                    UpdaterEntry? thisUpdater = JsonConvert.DeserializeObject<UpdaterEntry>(updaterText);
-
+                    UpdaterEntry? thisUpdater = GetUpdaterEntry(updaterClient, modAttributes.Attr.DownloadLink, modAttributes.Namespace);
                     if (thisUpdater == null)
                     {
                         MelonLogger.Msg("Skipping " + thisMod.Name + " due to json object corruption");
@@ -288,9 +296,10 @@ namespace UniversalUpdater
                         }
 
                         // download new and replace
-                        String fileURL = updateURL.Remove(updateURL.Length - 13);
-                        fileURL = fileURL + "/bin/" + thisMod.Name;
+                        String binaryPath = "/" + thisUpdater.RemotePath + "/" + thisMod.Name;
+                        String fileURL = FormatURLString(modAttributes.Attr.DownloadLink, modAttributes.Namespace, binaryPath);
                         MelonLogger.Msg(fileURL);
+
                         Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
                         FileStream fileStream = new(thisMod.FullName, FileMode.Create);
                         downloadStream.CopyTo(fileStream);
@@ -299,9 +308,9 @@ namespace UniversalUpdater
 
                         // TODO: deal with dependencies
                     }
-
-                    updaterClient.Dispose();
                 }
+
+                updaterClient.Dispose();
             }
             catch (Exception ex)
             {
