@@ -39,8 +39,8 @@ One `updater.json` file is needed for each mod and the format looks like:
 
 If the updater.json file is found then the SemVer versions from the assembly and the updater.json are compared to determine if an update is needed.
 
-The DLL should be stored in `/bin/<mod namespace>.dll` relative to the updater.json location
+The DLL should be stored in `/{RemotePath}/{ModNamespace}.dll` relative to the updater.json downloadLink path
 
 If the optional parameter `StoreBackup` is set to `true` then before any update occurs the previous DLL is copied into the Game\Mods\backup\ directory.
 
-TODO: Dependencies are planned but not currently supported in the code.
+Dependencies are optional but are only downloaded if the file is missing on the client or if the ForceUpdate is set to true.
