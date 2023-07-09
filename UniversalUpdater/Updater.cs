@@ -32,7 +32,7 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.1", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.2", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -118,7 +118,7 @@ namespace UniversalUpdater
         {
             AssemblyDefinition assemblyDefinition = AssemblyDefinition.ReadAssembly(fullModFilePath);
             CustomAttribute? customAttribute = assemblyDefinition.CustomAttributes.First(k => k.AttributeType.FullName == "MelonLoader.MelonInfoAttribute");
-            
+
             if (customAttribute != null)
             {
                 MelonInfoAttribute attributesOriginal = new(customAttribute.ConstructorArguments[0].Value.GetType(),
@@ -138,6 +138,33 @@ namespace UniversalUpdater
             }
 
             return null;
+        }
+
+        static bool IsNewerVersion(Version existingVersion, Version checkVersion)
+        {
+            if (existingVersion.CompareTo(checkVersion) < 0)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        static bool ShouldOverwriteBackup(String backupFile, Version currentVersion)
+        {
+            MelonInfoAttributeExtended? modAttributes = GetMelonModAttributes(backupFile);
+            if (modAttributes == null)
+            {
+                return true;
+            }
+
+            Version backupVersion = new(modAttributes.Attr.Version);
+            if (IsNewerVersion(backupVersion, currentVersion))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         // iterate through mod files
@@ -224,10 +251,10 @@ namespace UniversalUpdater
                     }
 
                     // compare the two versions
-                    Version thisVersion = new(thisUpdater.Version);
+                    Version updaterVersion = new(thisUpdater.Version);
                     Version currentVersion = new(modAttributes.Attr.Version);
                     // is the updater version higher
-                    if (currentVersion.CompareTo(thisVersion) < 0)
+                    if (IsNewerVersion(currentVersion, updaterVersion))
                     {
                         MelonLogger.Msg("Updating " + thisMod.Name + "...");
                         if (thisUpdater.UpdateNotes != null && thisUpdater.UpdateNotes.Length > 0)
@@ -246,7 +273,17 @@ namespace UniversalUpdater
 
                             MelonLogger.Msg("Moving " + thisMod.Name + " to backup directory");
                             String backupFilePath = Path.Combine(backupDirectory, thisMod.Name);
-                            System.IO.File.Move(thisMod.FullName, backupFilePath);
+                            if (System.IO.File.Exists(backupFilePath))
+                            {
+                                if (ShouldOverwriteBackup(backupFilePath, currentVersion))
+                                {
+                                    System.IO.File.Move(thisMod.FullName, backupFilePath, true);
+                                }
+                            }
+                            else
+                            {
+                                System.IO.File.Move(thisMod.FullName, backupFilePath);
+                            }
                         }
 
                         // download new and replace
