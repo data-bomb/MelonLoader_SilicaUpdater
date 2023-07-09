@@ -32,7 +32,7 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.2.0", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.2.1", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -62,23 +62,9 @@ namespace UniversalUpdater
 
         public class MelonInfoAttributeExtended
         {
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-            public MelonInfoAttribute Attr
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
-            {
-                get;
-                set;
-            }
-            public String? Namespace
-            {
-                get;
-                set;
-            }
-            public String? Class
-            {
-                get;
-                set;
-            }
+            public MelonInfoAttribute Attr { get; set; }
+            public String? Namespace { get; set; }
+            public String? Class { get; set; }
         }
 
         // there are 4 required parameters and 1 optional parameter
@@ -159,7 +145,6 @@ namespace UniversalUpdater
 
             // build URL
             String updateURL = FormatURLString(downloadLink, modNamespace, "updater.json");
-            MelonLogger.Msg(updateURL);
 
             try
             {
@@ -171,7 +156,7 @@ namespace UniversalUpdater
                 return null;
             }
 
-            MelonLogger.Msg(updaterText);
+            //MelonLogger.Msg(updaterText);
             UpdaterEntry? thisUpdater = JsonConvert.DeserializeObject<UpdaterEntry>(updaterText);
 
             return thisUpdater;
@@ -179,8 +164,6 @@ namespace UniversalUpdater
 
         static void DownloadFile(HttpClient updaterClient, String fileURL, FileInfo theFile)
         {
-            MelonLogger.Msg(fileURL);
-
             Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
             FileStream fileStream = new(theFile.FullName, FileMode.Create);
             downloadStream.CopyTo(fileStream);
@@ -254,7 +237,7 @@ namespace UniversalUpdater
                         continue;
                     }
 
-                    MelonLogger.Msg(modAttributes.Namespace + "." + modAttributes.Class + " " + modAttributes.Attr.Name + " " + modAttributes.Attr.Version + " " + modAttributes.Attr.Author + " " + modAttributes.Attr.DownloadLink);
+                    //MelonLogger.Msg(modAttributes.Namespace + "." + modAttributes.Class + " " + modAttributes.Attr.Name + " " + modAttributes.Attr.Version + " " + modAttributes.Attr.Author + " " + modAttributes.Attr.DownloadLink);
 
                     // attempt to grab the deserialized json
                     UpdaterEntry? thisUpdater = GetUpdaterEntry(updaterClient, modAttributes.Attr.DownloadLink, modAttributes.Namespace);
@@ -299,7 +282,7 @@ namespace UniversalUpdater
                     foreach (Dependency dependency in thisUpdater.Dependencies)
                     {
                         String dependencyFile = Path.GetFullPath(Path.Combine(MelonEnvironment.GameRootDirectory, dependency.LocalPath, dependency.Filename));
-                        MelonLogger.Msg("Found dependency: " + dependencyFile);
+                        //MelonLogger.Msg("Found dependency: " + dependencyFile);
 
                         bool dependencyExists = File.Exists(dependencyFile);
                         if (!dependencyExists || (dependencyExists && dependency.ForceUpdate))
