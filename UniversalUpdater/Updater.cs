@@ -32,20 +32,17 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.2.1", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.2.2", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
 {
     public class Updater : MelonPlugin
     {
-
-
-
         public class UpdaterEntry
         {
             public string Version { get; set; }
-            public string RemotePath { get; set; }
+            public string RemoteRelativePath { get; set; }
             public string? UpdateNotes { get; set; }
             public bool StoreBackup { get; set; }
             public Dependency[] Dependencies { get; set; }
@@ -54,7 +51,7 @@ namespace UniversalUpdater
         public class Dependency
         {
             public string Filename { get; set; }
-            public string RemoteURL { get; set; }
+            public string RemoteFullPath { get; set; }
             public string LocalPath { get; set; }
             public bool ForceUpdate { get; set; }
         }
@@ -269,7 +266,16 @@ namespace UniversalUpdater
                     }
 
                     // download new and replace
-                    String binaryPath = $"{thisUpdater.RemotePath}/{thisMod.Name}";
+                    String binaryPath = "";
+                    if (thisUpdater.RemoteRelativePath != null)
+                    {
+                        binaryPath = $"{thisUpdater.RemoteRelativePath}/{thisMod.Name}";
+                    }
+                    else
+                    {
+                        binaryPath = thisMod.Name;
+                    }
+                    
                     String fileURL = FormatURLString(modAttributes.Attr.DownloadLink, modAttributes.Namespace, binaryPath);
                     DownloadFile(updaterClient, fileURL, thisMod);
                     
@@ -287,7 +293,7 @@ namespace UniversalUpdater
                         bool dependencyExists = File.Exists(dependencyFile);
                         if (!dependencyExists || (dependencyExists && dependency.ForceUpdate))
                         {
-                            String dependencyURL = $"{dependency.RemoteURL}/{dependency.Filename}";
+                            String dependencyURL = $"{dependency.RemoteFullPath}/{dependency.Filename}";
                             FileInfo dependencyFileInfo = new FileInfo(dependencyFile);
                             DownloadFile(updaterClient, dependencyURL, dependencyFileInfo);
                         }
