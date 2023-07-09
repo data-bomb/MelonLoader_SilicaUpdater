@@ -32,7 +32,7 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.5", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.1.6", "databomb")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -207,6 +207,17 @@ namespace UniversalUpdater
             return thisUpdater;
         }
 
+        static void DownloadFile(HttpClient updaterClient, String fileURL, FileInfo theFile)
+        {
+            MelonLogger.Msg(fileURL);
+
+            Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
+            FileStream fileStream = new(theFile.FullName, FileMode.Create);
+            downloadStream.CopyTo(fileStream);
+
+            MelonLogger.Msg("Update for " + theFile.Name + " complete.");
+        }
+
         static void MakeModBackup(FileInfo theMod, Version theVersion)
         {
             String backupDirectory = System.IO.Path.Combine(MelonEnvironment.ModsDirectory, @"backup\");
@@ -307,15 +318,10 @@ namespace UniversalUpdater
                     // download new and replace
                     String binaryPath = "/" + thisUpdater.RemotePath + "/" + thisMod.Name;
                     String fileURL = FormatURLString(modAttributes.Attr.DownloadLink, modAttributes.Namespace, binaryPath);
-                    MelonLogger.Msg(fileURL);
-
-                    Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
-                    FileStream fileStream = new(thisMod.FullName, FileMode.Create);
-                    downloadStream.CopyTo(fileStream);
-
-                    MelonLogger.Msg("Update for " + thisMod.Name + " complete.");
+                    DownloadFile(updaterClient, fileURL, thisMod);
 
                     // TODO: deal with dependencies
+
                     }
 
                 updaterClient.Dispose();
