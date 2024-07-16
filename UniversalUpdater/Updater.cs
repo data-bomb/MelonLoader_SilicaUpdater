@@ -34,9 +34,8 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.IO;
-using Harmony;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.2", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.3", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -45,25 +44,38 @@ namespace UniversalUpdater
     {
         public class UpdaterEntry
         {
-            public string Version { get; set; }
-            public string RemoteRelativePath { get; set; }
+            public string? Version { get; set; }
+            public string? RemoteRelativePath { get; set; }
             public string? UpdateNotes { get; set; }
             public bool StoreBackup { get; set; }
-            public Dependency[] Dependencies { get; set; }
+            public Dependency[]? Dependencies { get; set; }
         }
 
         public class Dependency
         {
-            public string Filename { get; set; }
-            public string RemoteFullPath { get; set; }
-            public string LocalPath { get; set; }
+            public string? Filename { get; set; }
+            public string? RemoteFullPath { get; set; }
+            public string? LocalPath { get; set; }
             public bool ForceUpdate { get; set; }
         }
 
         public class ModInfo
         {
-            public string Name { get; set; }
-            public string Version { get; set; }
+            private string _name = null!;
+
+            public string Name
+            {
+                get => _name;
+                set => _name = value ?? throw new ArgumentNullException("Name name is required.");
+            }
+
+            private string _version = null!;
+
+            public string Version
+            {
+                get => _version;
+                set => _version = value ?? throw new ArgumentNullException("Version name is required.");
+            }
         }
 
         // there are 4 required parameters and 1 optional parameter (download link URL)
@@ -264,8 +276,12 @@ namespace UniversalUpdater
                 // loop through all unique download links
                 foreach (var thisDownloadTable in modDownloadList)
                 {
+                    MelonLogger.Warning("Found download link: " + thisDownloadTable.Key);
                     List<ModInfo> modList = thisDownloadTable.Value;
-                    
+                    foreach (var modInfo in modList)
+                    {
+                        MelonLogger.Msg("Found modname: " + modInfo.Name);
+                    }
                 }
 
                 updaterClient.Dispose();
