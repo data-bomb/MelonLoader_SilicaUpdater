@@ -27,12 +27,16 @@ using MelonLoader;
 using Newtonsoft.Json;
 using MelonLoader.Utils;
 using UniversalUpdater;
-using System.Reflection;
 using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using System.IO;
+using Harmony;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.0", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.1", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -54,6 +58,12 @@ namespace UniversalUpdater
             public string RemoteFullPath { get; set; }
             public string LocalPath { get; set; }
             public bool ForceUpdate { get; set; }
+        }
+
+        public class ModInfo
+        {
+            public string Name { get; set; };
+            public string Version { get; set; };
         }
 
         // there are 4 required parameters and 1 optional parameter (download link URL)
@@ -195,7 +205,7 @@ namespace UniversalUpdater
                     NoStore = true
                 };
 
-                Dictionary<string, List<string>> downloadLinksForMods = new Dictionary<string, List<string>>();
+                Dictionary<string, List<ModInfo>> modDownloadList = new Dictionary<string, List<ModInfo>>();
 
                 for (int i = 0; i < modFiles.Length; i++)
                 {
@@ -208,6 +218,8 @@ namespace UniversalUpdater
                         MelonLogger.Warning("Could not find MelonMod attributes for " + thisMod.Name);
                         continue;
                     }
+
+                    MelonLogger.Msg(modAttributes.Name + " " + modAttributes.Version + " " + modAttributes.Author + " " + modAttributes.DownloadLink);
 
                     if (modAttributes.DownloadLink == null)
                     {
@@ -222,15 +234,34 @@ namespace UniversalUpdater
                     }
 
                     // should we track a new (unique) download link?
-                    if (!downloadLinksForMods.ContainsKey(modAttributes.DownloadLink))
+                    if (!modDownloadList.ContainsKey(modAttributes.DownloadLink))
                     {
-                        List<string> modList = new List<string>();
-                        modList.Add()
-                        downloadLinksForMods.Add(modAttributes.DownloadLink, )
-                    }
-                    
+                        List<ModInfo> modList = new List<ModInfo>();
+                        ModInfo modInfoEntry = new()
+                        {
+                            Name = modAttributes.Name,
+                            Version = modAttributes.Version
+                        };
 
-                    MelonLogger.Msg(modAttributes.Name + " " + modAttributes.Version + " " + modAttributes.Author + " " + modAttributes.DownloadLink);
+                        modList.Add(modInfoEntry);
+                        modDownloadList.Add(modAttributes.DownloadLink, modList);
+                    }
+                    else
+                    {
+                        ModInfo modInfoEntry = new()
+                        {
+                            Name = modAttributes.Name,
+                            Version = modAttributes.Version
+                        };
+
+                        modDownloadList[modAttributes.DownloadLink].Add(modInfoEntry);
+                    }
+
+                }
+
+                // loop through all unique download links
+
+                    
 
                     // attempt to grab the deserialized json
                     UpdaterEntry? thisUpdater = GetUpdaterEntry(updaterClient, modAttributes.DownloadLink);
