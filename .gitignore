@@ -1,0 +1,9 @@
+# ignore build files
+**/obj/
+**/bin/Debug/
+**/bin/Release/
+**/.vs/
+# ignore macos hidden files
+.DS_Store
+# ignore VSCode environment
+.vscode/*
