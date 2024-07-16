@@ -1,6 +1,6 @@
 ﻿/*
 Universal Mod Updater Plugin
-Copyright (C) 2023 by databomb
+Copyright (C) 2023-2024 by databomb
 
 * Description *
 Checks each DLL file in the Mods\ directory for the assemblyInfo 
@@ -32,7 +32,7 @@ using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "1.2.2", "databomb")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.0", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -56,42 +56,27 @@ namespace UniversalUpdater
             public bool ForceUpdate { get; set; }
         }
 
-
-        public class MelonInfoAttributeExtended
-        {
-            public MelonInfoAttribute Attr { get; set; }
-            public String? Namespace { get; set; }
-            public String? Class { get; set; }
-        }
-
-        // there are 4 required parameters and 1 optional parameter
+        // there are 4 required parameters and 1 optional parameter (download link URL)
         // https://melonwiki.xyz/#/modders/attributes
-        // type isn't available yet so extend to add 2 optional parameters for namespace and class
-        static MelonInfoAttributeExtended? GetMelonModAttributes(String fullModFilePath)
+        static MelonInfoAttribute? GetMelonModAttributes(String fullModFilePath)
         {
             AssemblyDefinition assemblyDefinition = AssemblyDefinition.ReadAssembly(fullModFilePath);
             CustomAttribute? customAttribute = assemblyDefinition.CustomAttributes.First(k => k.AttributeType.FullName == "MelonLoader.MelonInfoAttribute");
             assemblyDefinition.Dispose();
 
-            if (customAttribute != null)
+            if (customAttribute == null)
             {
-                MelonInfoAttribute attributesOriginal = new(customAttribute.ConstructorArguments[0].Value.GetType(),
-                                                            (String)customAttribute.ConstructorArguments[1].Value,
-                                                            (String)customAttribute.ConstructorArguments[2].Value,
-                                                            (String)customAttribute.ConstructorArguments[3].Value,
-                                                            (String)customAttribute.ConstructorArguments[4].Value);
-
-                MelonInfoAttributeExtended attributesExtended = new()
-                {
-                    Attr = attributesOriginal,
-                    Namespace = customAttribute.ConstructorArguments[0].Value.ToString().Split('.')[0],
-                    Class = customAttribute.ConstructorArguments[0].Value.ToString().Split('.')[1]
-                };
-
-                return attributesExtended;
+                MelonLogger.Warning("Could not find a MelonInfo attribute set for mod file: " +  fullModFilePath);
+                return null;
             }
 
-            return null;
+            MelonInfoAttribute attributesOriginal = new(customAttribute.ConstructorArguments[0].Value.GetType(),
+                                                        (String)customAttribute.ConstructorArguments[1].Value,
+                                                        (String)customAttribute.ConstructorArguments[2].Value,
+                                                        (String)customAttribute.ConstructorArguments[3].Value,
+                                                        (String)customAttribute.ConstructorArguments[4].Value);
+
+            return attributesOriginal;
         }
 
         static bool IsNewerVersion(Version existingVersion, Version checkVersion)
@@ -106,13 +91,13 @@ namespace UniversalUpdater
 
         static bool ShouldOverwriteBackup(String backupFile, Version currentVersion)
         {
-            MelonInfoAttributeExtended? modAttributes = GetMelonModAttributes(backupFile);
+            MelonInfoAttribute? modAttributes = GetMelonModAttributes(backupFile);
             if (modAttributes == null)
             {
                 return true;
             }
 
-            Version backupVersion = new(modAttributes.Attr.Version);
+            Version backupVersion = new(modAttributes.Version);
             if (IsNewerVersion(backupVersion, currentVersion))
             {
                 return true;
@@ -210,34 +195,45 @@ namespace UniversalUpdater
                     NoStore = true
                 };
 
+                Dictionary<string, List<string>> downloadLinksForMods = new Dictionary<string, List<string>>();
+
                 for (int i = 0; i < modFiles.Length; i++)
                 {
                     FileInfo thisMod = modFiles[i];
 
                     // read assembly info without loading the mod
-                    MelonInfoAttributeExtended? modAttributes = GetMelonModAttributes(thisMod.FullName);
+                    MelonInfoAttribute? modAttributes = GetMelonModAttributes(thisMod.FullName);
                     if (modAttributes == null)
                     {
                         MelonLogger.Warning("Could not find MelonMod attributes for " + thisMod.Name);
                         continue;
                     }
 
-                    if (modAttributes.Attr.DownloadLink == null)
+                    if (modAttributes.DownloadLink == null)
                     {
                         MelonLogger.Msg("No download URL found for " + thisMod.Name);
                         continue;
                     }
 
-                    if (!modAttributes.Attr.DownloadLink.StartsWith("http"))
+                    if (!modAttributes.DownloadLink.StartsWith("http"))
                     {
                         MelonLogger.Warning("Invalid URL found for " + thisMod.Name);
                         continue;
                     }
 
-                    //MelonLogger.Msg(modAttributes.Namespace + "." + modAttributes.Class + " " + modAttributes.Attr.Name + " " + modAttributes.Attr.Version + " " + modAttributes.Attr.Author + " " + modAttributes.Attr.DownloadLink);
+                    // should we track a new (unique) download link?
+                    if (!downloadLinksForMods.ContainsKey(modAttributes.DownloadLink))
+                    {
+                        List<string> modList = new List<string>();
+                        modList.Add()
+                        downloadLinksForMods.Add(modAttributes.DownloadLink, )
+                    }
+                    
+
+                    MelonLogger.Msg(modAttributes.Name + " " + modAttributes.Version + " " + modAttributes.Author + " " + modAttributes.DownloadLink);
 
                     // attempt to grab the deserialized json
-                    UpdaterEntry? thisUpdater = GetUpdaterEntry(updaterClient, modAttributes.Attr.DownloadLink, modAttributes.Namespace);
+                    UpdaterEntry? thisUpdater = GetUpdaterEntry(updaterClient, modAttributes.DownloadLink);
                     if (thisUpdater == null)
                     {
                         MelonLogger.Msg("Skipping " + thisMod.Name + " due to json object corruption");
@@ -245,7 +241,7 @@ namespace UniversalUpdater
                     }
 
                     Version updaterVersion = new(thisUpdater.Version);
-                    Version currentVersion = new(modAttributes.Attr.Version);
+                    Version currentVersion = new(modAttributes.Version);
                     // do we already have the latest version?
                     if (!IsNewerVersion(currentVersion, updaterVersion))
                     {
@@ -276,7 +272,7 @@ namespace UniversalUpdater
                         binaryPath = thisMod.Name;
                     }
                     
-                    String fileURL = FormatURLString(modAttributes.Attr.DownloadLink, modAttributes.Namespace, binaryPath);
+                    String fileURL = FormatURLString(modAttributes.DownloadLink, binaryPath);
                     DownloadFile(updaterClient, fileURL, thisMod);
                     
                     if (thisUpdater.Dependencies == null)
@@ -294,7 +290,7 @@ namespace UniversalUpdater
                         if (!dependencyExists || (dependencyExists && dependency.ForceUpdate))
                         {
                             String dependencyURL = $"{dependency.RemoteFullPath}/{dependency.Filename}";
-                            FileInfo dependencyFileInfo = new FileInfo(dependencyFile);
+                            FileInfo dependencyFileInfo = new(dependencyFile);
                             DownloadFile(updaterClient, dependencyURL, dependencyFileInfo);
                         }
                     }
