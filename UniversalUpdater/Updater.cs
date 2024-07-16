@@ -36,7 +36,7 @@ using System.Collections.Generic;
 using System.IO;
 using Harmony;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.1", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.2", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -62,8 +62,8 @@ namespace UniversalUpdater
 
         public class ModInfo
         {
-            public string Name { get; set; };
-            public string Version { get; set; };
+            public string Name { get; set; }
+            public string Version { get; set; }
         }
 
         // there are 4 required parameters and 1 optional parameter (download link URL)
@@ -80,11 +80,11 @@ namespace UniversalUpdater
                 return null;
             }
 
-            MelonInfoAttribute attributesOriginal = new(customAttribute.ConstructorArguments[0].Value.GetType(),
-                                                        (String)customAttribute.ConstructorArguments[1].Value,
-                                                        (String)customAttribute.ConstructorArguments[2].Value,
-                                                        (String)customAttribute.ConstructorArguments[3].Value,
-                                                        (String)customAttribute.ConstructorArguments[4].Value);
+            MelonInfoAttribute attributesOriginal = new MelonInfoAttribute(customAttribute.ConstructorArguments[0].Value.GetType(),
+                                                                   (String)customAttribute.ConstructorArguments[1].Value,
+                                                                   (String)customAttribute.ConstructorArguments[2].Value,
+                                                                   (String)customAttribute.ConstructorArguments[3].Value,
+                                                                   (String)customAttribute.ConstructorArguments[4].Value);
 
             return attributesOriginal;
         }
@@ -107,7 +107,8 @@ namespace UniversalUpdater
                 return true;
             }
 
-            Version backupVersion = new(modAttributes.Version);
+            Version version = new Version(modAttributes.Version);
+            Version backupVersion = version;
             if (IsNewerVersion(backupVersion, currentVersion))
             {
                 return true;
@@ -157,7 +158,7 @@ namespace UniversalUpdater
         static void DownloadFile(HttpClient updaterClient, String fileURL, FileInfo theFile)
         {
             Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
-            FileStream fileStream = new(theFile.FullName, FileMode.Create);
+            FileStream fileStream = new FileStream(theFile.FullName, FileMode.Create);
             downloadStream.CopyTo(fileStream);
 
             MelonLogger.Msg("Download of " + theFile.Name + " complete.");
@@ -178,7 +179,8 @@ namespace UniversalUpdater
             {
                 if (ShouldOverwriteBackup(backupFilePath, theVersion))
                 {
-                    System.IO.File.Move(theMod.FullName, backupFilePath, true);
+                    System.IO.File.Copy(theMod.FullName, backupFilePath, true);
+                    System.IO.File.Delete(theMod.FullName);
                 }
             }
             else
@@ -193,10 +195,10 @@ namespace UniversalUpdater
             try
             {
                 string modsPath = MelonEnvironment.ModsDirectory;
-                DirectoryInfo modsDirectory = new(modsPath);
+                DirectoryInfo modsDirectory = new DirectoryInfo(modsPath);
                 FileInfo[] modFiles = modsDirectory.GetFiles("*.dll");
 
-                HttpClient updaterClient = new();
+                HttpClient updaterClient = new HttpClient();
                 updaterClient.DefaultRequestHeaders.Add("User-Agent", "MelonUpdater");
                 updaterClient.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue
                 {
@@ -237,7 +239,7 @@ namespace UniversalUpdater
                     if (!modDownloadList.ContainsKey(modAttributes.DownloadLink))
                     {
                         List<ModInfo> modList = new List<ModInfo>();
-                        ModInfo modInfoEntry = new()
+                        ModInfo modInfoEntry = new ModInfo()
                         {
                             Name = modAttributes.Name,
                             Version = modAttributes.Version
@@ -248,7 +250,7 @@ namespace UniversalUpdater
                     }
                     else
                     {
-                        ModInfo modInfoEntry = new()
+                        ModInfo modInfoEntry = new ModInfo()
                         {
                             Name = modAttributes.Name,
                             Version = modAttributes.Version
@@ -260,71 +262,10 @@ namespace UniversalUpdater
                 }
 
                 // loop through all unique download links
-
+                foreach (var thisDownloadTable in modDownloadList)
+                {
+                    List<ModInfo> modList = thisDownloadTable.Value;
                     
-
-                    // attempt to grab the deserialized json
-                    UpdaterEntry? thisUpdater = GetUpdaterEntry(updaterClient, modAttributes.DownloadLink);
-                    if (thisUpdater == null)
-                    {
-                        MelonLogger.Msg("Skipping " + thisMod.Name + " due to json object corruption");
-                        continue;
-                    }
-
-                    Version updaterVersion = new(thisUpdater.Version);
-                    Version currentVersion = new(modAttributes.Version);
-                    // do we already have the latest version?
-                    if (!IsNewerVersion(currentVersion, updaterVersion))
-                    {
-                        MelonLogger.Msg("Skipping " + thisMod.Name + " due to already having latest version");
-                        continue;
-                    }
-
-                    MelonLogger.Msg("Updating " + thisMod.Name + "...");
-
-                    if (thisUpdater.UpdateNotes != null && thisUpdater.UpdateNotes.Length > 0)
-                    {
-                        MelonLogger.Msg(thisMod.Name + " Patch Notes- " + thisUpdater.UpdateNotes);
-                    }
-
-                    if (thisUpdater.StoreBackup)
-                    {
-                        MakeModBackup(thisMod, currentVersion);
-                    }
-
-                    // download new and replace
-                    String binaryPath = "";
-                    if (thisUpdater.RemoteRelativePath != null)
-                    {
-                        binaryPath = $"{thisUpdater.RemoteRelativePath}/{thisMod.Name}";
-                    }
-                    else
-                    {
-                        binaryPath = thisMod.Name;
-                    }
-                    
-                    String fileURL = FormatURLString(modAttributes.DownloadLink, binaryPath);
-                    DownloadFile(updaterClient, fileURL, thisMod);
-                    
-                    if (thisUpdater.Dependencies == null)
-                    {
-                        continue;
-                    }
-
-                    // walk dependencies
-                    foreach (Dependency dependency in thisUpdater.Dependencies)
-                    {
-                        String dependencyFile = Path.GetFullPath(Path.Combine(MelonEnvironment.GameRootDirectory, dependency.LocalPath, dependency.Filename));
-                        //MelonLogger.Msg("Found dependency: " + dependencyFile);
-
-                        bool dependencyExists = File.Exists(dependencyFile);
-                        if (!dependencyExists || (dependencyExists && dependency.ForceUpdate))
-                        {
-                            String dependencyURL = $"{dependency.RemoteFullPath}/{dependency.Filename}";
-                            FileInfo dependencyFileInfo = new(dependencyFile);
-                            DownloadFile(updaterClient, dependencyURL, dependencyFileInfo);
-                        }
-                    }
                 }
 
                 updaterClient.Dispose();
