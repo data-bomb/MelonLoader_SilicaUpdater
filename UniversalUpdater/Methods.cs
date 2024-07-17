@@ -25,10 +25,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 using MelonLoader;
 using Mono.Cecil;
+using Newtonsoft.Json.Linq;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 
 namespace UniversalUpdater
 {
@@ -57,9 +60,12 @@ namespace UniversalUpdater
             return attributesOriginal;
         }
 
-        public static bool IsNewerVersion(System.Version existingVersion, System.Version checkVersion)
+        public static bool IsNewerVersion(string currentVersionText, string temporaryVersionText)
         {
-            if (existingVersion.CompareTo(checkVersion) < 0)
+            System.Version currentVersion = new System.Version(currentVersionText);
+            System.Version temporaryVersion = new System.Version(temporaryVersionText);
+
+            if (currentVersion.CompareTo(temporaryVersion) < 0)
             {
                 return true;
             }
@@ -67,7 +73,7 @@ namespace UniversalUpdater
             return false;
         }
 
-        public static bool ShouldOverwriteBackup(String backupFile, System.Version currentVersion)
+        public static bool ShouldOverwriteBackup(String backupFile, string currentVersion)
         {
             MelonInfoAttribute? modAttributes = GetMelonModAttributes(backupFile);
             if (modAttributes == null)
@@ -75,9 +81,7 @@ namespace UniversalUpdater
                 return true;
             }
 
-            System.Version version = new System.Version(modAttributes.Version);
-            System.Version backupVersion = version;
-            if (IsNewerVersion(backupVersion, currentVersion))
+            if (IsNewerVersion(modAttributes.Version, currentVersion))
             {
                 return true;
             }
@@ -100,10 +104,13 @@ namespace UniversalUpdater
             }
         }
 
+        public static bool IsZipAsset(string assetFile)
+        {
+            return assetFile.EndsWith(".zip");
+        }
+
         public static void DownloadFile(HttpClient updaterClient, String fileURL, string fullPath)
         {
-            MelonLogger.Msg("Trying to access URL: " + fileURL + " to location " + fullPath);
-
             if (File.Exists(fullPath))
             {
                 System.IO.File.Delete(fullPath);
@@ -117,7 +124,7 @@ namespace UniversalUpdater
             MelonLogger.Msg("Download of " + Path.GetFileName(fullPath) + " complete.");
         }
 
-        public static void MakeModBackup(FileInfo theMod, System.Version theVersion)
+        public static void MakeModBackup(FileInfo theMod, string theVersion)
         {
             if (!System.IO.Directory.Exists(modsBackupDirectory))
             {
@@ -141,6 +148,119 @@ namespace UniversalUpdater
                 MelonLogger.Msg("Moving " + theMod.Name + " to backup directory");
                 System.IO.File.Move(theMod.FullName, backupFilePath);
             }
+        }
+
+        public static void InitializeTemporaryDirectory()
+        {
+            if (!System.IO.Directory.Exists(modsTemporaryDirectory))
+            {
+                MelonLogger.Msg("Creating temporary directory at: " + modsTemporaryDirectory);
+                System.IO.Directory.CreateDirectory(modsTemporaryDirectory);
+            }
+            else
+            {
+                MelonLogger.Msg("Removing all files from temporary directory (" + modsTemporaryDirectory + ")");
+                System.IO.DirectoryInfo tempDirectory = new DirectoryInfo(modsTemporaryDirectory);
+                foreach (System.IO.FileInfo file in tempDirectory.GetFiles())
+                {
+                    file.Delete();
+                }
+            }
+        }
+
+        public static void InitializeWebClient()
+        {
+            updaterClient = new HttpClient();
+            updaterClient.DefaultRequestHeaders.Add("User-Agent", "MelonUpdater");
+            updaterClient.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue
+            {
+                NoCache = true,
+                Private = true,
+                NoStore = true
+            };
+        }
+
+        public static FileInfo[] GetModFileList()
+        {
+            DirectoryInfo modsDirectory = new DirectoryInfo(modsPath);
+            return modsDirectory.GetFiles("*.dll");
+        }
+
+        public static Dictionary<string, List<ModInfo>> GenerateDownloadList()
+        {
+            FileInfo[] modFiles = GetModFileList();
+            Dictionary<string, List<ModInfo>> modDownloadList = new Dictionary<string, List<ModInfo>>();
+
+            for (int i = 0; i < modFiles.Length; i++)
+            {
+                FileInfo thisMod = modFiles[i];
+
+                // read assembly info without loading the mod
+                MelonInfoAttribute? modAttributes = GetMelonModAttributes(thisMod.FullName);
+                if (modAttributes == null)
+                {
+                    MelonLogger.Error("Could not find MelonMod attributes for " + thisMod.Name);
+                    continue;
+                }
+
+                if (modAttributes.DownloadLink == null)
+                {
+                    MelonLogger.Msg("No download URL found for " + thisMod.Name);
+                    continue;
+                }
+
+                if (!modAttributes.DownloadLink.StartsWith("http"))
+                {
+                    MelonLogger.Warning("Invalid URL found for " + thisMod.Name);
+                    continue;
+                }
+
+                // should we track a new (unique) download link?
+                if (!modDownloadList.ContainsKey(modAttributes.DownloadLink))
+                {
+                    List<ModInfo> modList = new List<ModInfo>();
+                    ModInfo modInfoEntry = new ModInfo()
+                    {
+                        FileInfo = thisMod,
+                        Version = modAttributes.Version
+                    };
+
+                    modList.Add(modInfoEntry);
+                    modDownloadList.Add(modAttributes.DownloadLink, modList);
+                }
+                else
+                {
+                    ModInfo modInfoEntry = new ModInfo()
+                    {
+                        FileInfo = thisMod,
+                        Version = modAttributes.Version
+                    };
+
+                    modDownloadList[modAttributes.DownloadLink].Add(modInfoEntry);
+                }
+            }
+
+            return modDownloadList;
+        }
+
+        public static bool IsGitHubLink(string downloadURL)
+        {
+            return downloadURL.StartsWith("https://github.com");
+        }
+
+        public static string GetGitHubReleaseLink(string downloadURL)
+        {
+            string repoOwner = downloadURL.Split('/')[3];
+            string repoName = downloadURL.Split('/')[4];
+            return $"https://api.github.com/repos/{repoOwner}/{repoName}/releases/latest";
+        }
+
+        public static JObject GetGitHubReleaseJson(string downloadURL)
+        {
+            string downloadReleaseURL = Methods.GetGitHubReleaseLink(downloadURL);
+            string urlText = updaterClient.GetStringAsync(downloadReleaseURL).Result;
+            dynamic jsonText = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(urlText)!;
+            return JObject.Parse(urlText);
         }
     }
 }
