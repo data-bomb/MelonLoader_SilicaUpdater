@@ -33,7 +33,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 
-namespace UniversalUpdater
+namespace ModUpdater
 {
     public class Methods : Updater
     {
@@ -102,6 +102,26 @@ namespace UniversalUpdater
             {
                 return $"{downloadLink}/{modNamespace}/{subPath}";
             }
+        }
+
+        public static void ProcessAssetZip(JToken releaseAssetName, JToken releaseDownloadURL, List<ModInfo> modList)
+        {
+            if (string.Equals(MelonLoader.InternalUtils.UnityInformationHandler.GameName, "Silica"))
+            {
+                if(MelonUtils.IsGameIl2Cpp() && releaseAssetName.ToString().StartsWith("Listen"))
+                {
+                    MelonLogger.Msg("Found listen server zip file: " + releaseAssetName.ToString());
+                    return;
+                }
+
+                if (!MelonUtils.IsGameIl2Cpp() && releaseAssetName.ToString().StartsWith("Dedicated"))
+                {
+                    MelonLogger.Msg("Found dedicated server zip file: " + releaseAssetName.ToString());
+                    return;
+                }
+            }
+
+            MelonLogger.Msg("Skipping zip file: " + releaseAssetName.ToString());
         }
 
         public static void ProcessAssetDLL(JToken releaseAssetName, JToken releaseDownloadURL, List<ModInfo> modList)
@@ -202,9 +222,15 @@ namespace UniversalUpdater
             }
         }
 
+        public static void RemoveTemporaryDirectory()
+        {
+            System.IO.DirectoryInfo tempDirectory = new DirectoryInfo(modsTemporaryDirectory);
+            tempDirectory.Delete(true);
+            MelonLogger.Msg("Removed all temporary files.");
+        }
+
         public static void RemoveTemporaryFiles()
         {
-            MelonLogger.Msg("Removing all files from temporary directory.");
             System.IO.DirectoryInfo tempDirectory = new DirectoryInfo(modsTemporaryDirectory);
             foreach (System.IO.FileInfo file in tempDirectory.GetFiles())
             {

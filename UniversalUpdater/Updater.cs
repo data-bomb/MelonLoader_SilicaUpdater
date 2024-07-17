@@ -32,7 +32,7 @@ using Steamworks;
 using MelonLoader;
 using Newtonsoft.Json;
 using MelonLoader.Utils;
-using UniversalUpdater;
+using ModUpdater;
 using Mono.Cecil;
 using System.Net.Http.Headers;
 using System.Net.Http;
@@ -42,10 +42,10 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json.Linq;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.7", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
+[assembly: MelonInfo(typeof(Updater), "Mod Updater", "2.0.8", "databomb", "https://github.com/data-bomb/MelonLoader_Updater")]
 [assembly: MelonGame(null, null)]
 
-namespace UniversalUpdater
+namespace ModUpdater
 {
     public class Updater : MelonPlugin
     {
@@ -59,7 +59,10 @@ namespace UniversalUpdater
         {
             try
             {
-                SteamAPI.Init();
+                if (!SteamAPI.IsSteamRunning())
+                {
+                    SteamAPI.Init();
+                }
             }
             catch (Exception ex)
             {
@@ -104,7 +107,7 @@ namespace UniversalUpdater
                         // is this a zip file or a DLL?
                         if (Methods.IsZipAsset(releaseAssetName.ToString()))
                         {
-                            MelonLogger.Msg("Found zip file. Skipping for now.");
+                            Methods.ProcessAssetZip(releaseAssetName, releaseDownloadURL, associatedMods);
                             continue;
                         }
 
@@ -118,7 +121,7 @@ namespace UniversalUpdater
                     }
                 }
 
-                Methods.RemoveTemporaryFiles();
+                Methods.RemoveTemporaryDirectory();
                 updaterClient.Dispose();
             }
             catch (Exception ex)
