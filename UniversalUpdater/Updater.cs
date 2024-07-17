@@ -42,141 +42,26 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json.Linq;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.4", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.5", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
 {
     public class Updater : MelonPlugin
     {
-        static readonly string modsBackupDirectory = Path.Combine(MelonEnvironment.ModsDirectory, @"backup\");
-        static readonly string modsTemporaryDirectory = Path.Combine(MelonEnvironment.ModsDirectory, @"temp\");
+        public static readonly string modsBackupDirectory = Path.Combine(MelonEnvironment.ModsDirectory, @"backup\");
+        public static readonly string modsTemporaryDirectory = Path.Combine(MelonEnvironment.ModsDirectory, @"temp\");
 
-        public class ModInfo
+        // initialize steam
+        public override void OnPreInitialization()
         {
-            private FileInfo _fileinfo = null!;
-
-            public FileInfo FileInfo
+            try
             {
-                get => _fileinfo;
-                set => _fileinfo = value ?? throw new ArgumentNullException(nameof(value));
+                SteamAPI.Init();
             }
-
-            private string _version = null!;
-
-            public string Version
+            catch (Exception ex)
             {
-                get => _version;
-                set => _version = value ?? throw new ArgumentNullException(nameof(value));
-            }
-        }
-
-        // there are 4 required parameters and 1 optional parameter (download link URL)
-        // https://melonwiki.xyz/#/modders/attributes
-        static MelonInfoAttribute? GetMelonModAttributes(String fullModFilePath)
-        {
-            AssemblyDefinition assemblyDefinition = AssemblyDefinition.ReadAssembly(fullModFilePath);
-            CustomAttribute? customAttribute = assemblyDefinition.CustomAttributes.First(k => k.AttributeType.FullName == "MelonLoader.MelonInfoAttribute");
-            assemblyDefinition.Dispose();
-
-            if (customAttribute == null)
-            {
-                MelonLogger.Warning("Could not find a MelonInfo attribute set for mod file: " +  fullModFilePath);
-                return null;
-            }
-
-            MelonInfoAttribute attributesOriginal = new MelonInfoAttribute(customAttribute.ConstructorArguments[0].Value.GetType(),
-                                                                   (String)customAttribute.ConstructorArguments[1].Value,
-                                                                   (String)customAttribute.ConstructorArguments[2].Value,
-                                                                   (String)customAttribute.ConstructorArguments[3].Value,
-                                                                   (String)customAttribute.ConstructorArguments[4].Value);
-
-            return attributesOriginal;
-        }
-
-        static bool IsNewerVersion(System.Version existingVersion, System.Version checkVersion)
-        {
-            if (existingVersion.CompareTo(checkVersion) < 0)
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        static bool ShouldOverwriteBackup(String backupFile, System.Version currentVersion)
-        {
-            MelonInfoAttribute? modAttributes = GetMelonModAttributes(backupFile);
-            if (modAttributes == null)
-            {
-                return true;
-            }
-
-            System.Version version = new System.Version(modAttributes.Version);
-            System.Version backupVersion = version;
-            if (IsNewerVersion(backupVersion, currentVersion))
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        static String FormatURLString(String downloadLink, String modNamespace, String subPath)
-        {
-            // check for GitHub and translate to raw URL
-            if (downloadLink.StartsWith("https://github.com/"))
-            {
-                String githubAccount = downloadLink.Split('/')[3];
-                String githubRepo = downloadLink.Split('/')[4];
-                return $"https://raw.githubusercontent.com/{githubAccount}/{githubRepo}/main/{modNamespace}/{subPath}";
-            }
-            else
-            {
-                return $"{downloadLink}/{modNamespace}/{subPath}";
-            }
-        }
-
-        static void DownloadFile(HttpClient updaterClient, String fileURL, string fullPath)
-        {
-            MelonLogger.Msg("Trying to access URL: " + fileURL + " to location " + fullPath);
-
-            if (File.Exists(fullPath))
-            {
-                System.IO.File.Delete(fullPath);
-            }
-
-            Stream downloadStream = updaterClient.GetStreamAsync(fileURL).Result;
-            FileStream fileStream = new FileStream(fullPath, FileMode.Create);
-            downloadStream.CopyTo(fileStream);
-            fileStream.Dispose();
-
-            MelonLogger.Msg("Download of " + Path.GetFileName(fullPath) + " complete.");
-        }
-
-        static void MakeModBackup(FileInfo theMod, System.Version theVersion)
-        {
-            if (!System.IO.Directory.Exists(modsBackupDirectory))
-            {
-                MelonLogger.Msg("Creating backup directory at: " + modsBackupDirectory);
-                System.IO.Directory.CreateDirectory(modsBackupDirectory);
-            }
-
-            
-            String backupFilePath = Path.Combine(modsBackupDirectory, theMod.Name);
-            if (System.IO.File.Exists(backupFilePath))
-            {
-                if (ShouldOverwriteBackup(backupFilePath, theVersion))
-                {
-                    MelonLogger.Msg("Overwriting existing backup for " + theMod.Name);
-                    System.IO.File.Delete(backupFilePath);
-                    System.IO.File.Copy(theMod.FullName, backupFilePath, true);
-                }
-            }
-            else
-            {
-                MelonLogger.Msg("Moving " + theMod.Name + " to backup directory");
-                System.IO.File.Move(theMod.FullName, backupFilePath);
+                MelonLogger.Warning(ex.ToString());
             }
         }
 
@@ -204,7 +89,7 @@ namespace UniversalUpdater
                     FileInfo thisMod = modFiles[i];
 
                     // read assembly info without loading the mod
-                    MelonInfoAttribute? modAttributes = GetMelonModAttributes(thisMod.FullName);
+                    MelonInfoAttribute? modAttributes = Methods.GetMelonModAttributes(thisMod.FullName);
                     if (modAttributes == null)
                     {
                         MelonLogger.Warning("Could not find MelonMod attributes for " + thisMod.Name);
@@ -307,9 +192,9 @@ namespace UniversalUpdater
 
                                 string temporaryFilePath = Path.Combine(modsTemporaryDirectory, modInfo.FileInfo.Name);
 
-                                DownloadFile(updaterClient, releaseDownloadURL.ToString(), temporaryFilePath);
+                                Methods.DownloadFile(updaterClient, releaseDownloadURL.ToString(), temporaryFilePath);
                                 System.Version currentVersion = new System.Version(modInfo.Version);
-                                MelonInfoAttribute? tempModAttributes = GetMelonModAttributes(temporaryFilePath);
+                                MelonInfoAttribute? tempModAttributes = Methods.GetMelonModAttributes(temporaryFilePath);
                                 if (tempModAttributes == null)
                                 {
                                     MelonLogger.Warning("Could not find MelonMod attributes for " + temporaryFilePath);
@@ -318,7 +203,7 @@ namespace UniversalUpdater
                                 System.Version temporaryVersion = new System.Version(tempModAttributes.Version);
 
                                 // do we already have the latest version?
-                                if (!IsNewerVersion(currentVersion, temporaryVersion))
+                                if (!Methods.IsNewerVersion(currentVersion, temporaryVersion))
                                 {
                                     MelonLogger.Msg("Skipping update for " + modInfo.FileInfo.Name + ". Version " + tempModAttributes.Version + " is the latest.");
                                     continue;
@@ -326,7 +211,7 @@ namespace UniversalUpdater
 
                                 MelonLogger.Msg("Updating " + modInfo.FileInfo.Name + " to version " + tempModAttributes.Version + "...");
 
-                                MakeModBackup(modInfo.FileInfo, currentVersion);
+                                Methods.MakeModBackup(modInfo.FileInfo, currentVersion);
                                 System.IO.File.Copy(temporaryFilePath, modInfo.FileInfo.FullName, true);
                             }
                         }
@@ -334,19 +219,6 @@ namespace UniversalUpdater
                 }
 
                 updaterClient.Dispose();
-            }
-            catch (Exception ex)
-            {
-                MelonLogger.Warning(ex.ToString());
-            }
-        }
-
-        // initialize steam
-        public override void OnPreInitialization()
-        {
-            try
-            {
-                SteamAPI.Init();
             }
             catch (Exception ex)
             {
