@@ -29,6 +29,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -108,20 +109,53 @@ namespace ModUpdater
         {
             if (string.Equals(MelonLoader.InternalUtils.UnityInformationHandler.GameName, "Silica"))
             {
-                if(MelonUtils.IsGameIl2Cpp() && releaseAssetName.ToString().StartsWith("Listen"))
+                if((MelonUtils.IsGameIl2Cpp() && releaseAssetName.ToString().StartsWith("Listen")) ||
+                    (!MelonUtils.IsGameIl2Cpp() && releaseAssetName.ToString().StartsWith("Dedicated")))
                 {
-                    MelonLogger.Msg("Found listen server zip file: " + releaseAssetName.ToString());
-                    return;
-                }
+                    MelonLogger.Msg(System.ConsoleColor.DarkGreen, "Downloading server zip file...");
 
-                if (!MelonUtils.IsGameIl2Cpp() && releaseAssetName.ToString().StartsWith("Dedicated"))
-                {
-                    MelonLogger.Msg("Found dedicated server zip file: " + releaseAssetName.ToString());
+                    string temporaryFilePath = Path.Combine(modsTemporaryDirectory, releaseAssetName.ToString());
+                    DownloadFile(updaterClient, releaseDownloadURL.ToString(), temporaryFilePath);
+
+                    using (ZipArchive zip = ZipFile.Open(temporaryFilePath, ZipArchiveMode.Read))
+                    {
+                        foreach (ZipArchiveEntry entry in zip.Entries)
+                        {
+                            foreach (var modInfo in modList)
+                            {
+                                if (string.Equals(entry.Name, modInfo.FileInfo.Name, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    temporaryFilePath = Path.Combine(modsTemporaryDirectory, entry.Name);
+                                    entry.ExtractToFile(temporaryFilePath);
+
+                                    MelonInfoAttribute? tempModAttributes = GetMelonModAttributes(temporaryFilePath);
+                                    if (tempModAttributes == null)
+                                    {
+                                        MelonLogger.Warning("Could not find MelonMod attributes for " + temporaryFilePath);
+                                        continue;
+                                    }
+
+                                    // do we already have the latest version?
+                                    if (!Methods.IsNewerVersion(modInfo.Version, tempModAttributes.Version))
+                                    {
+                                        MelonLogger.Msg(System.ConsoleColor.Blue, modInfo.FileInfo.Name + " is up-to-date. (Version: " + tempModAttributes.Version + ")");
+                                        continue;
+                                    }
+
+                                    MelonLogger.Msg(System.ConsoleColor.Cyan, "Updating " + modInfo.FileInfo.Name + " to version " + tempModAttributes.Version + "...");
+
+                                    Methods.MakeModBackup(modInfo.FileInfo, modInfo.Version);
+                                    System.IO.File.Copy(temporaryFilePath, modInfo.FileInfo.FullName, true);
+                                }
+                            }
+                        }
+                    }
+                        
                     return;
                 }
             }
 
-            MelonLogger.Msg("Skipping zip file: " + releaseAssetName.ToString());
+            MelonLogger.Msg(System.ConsoleColor.Blue, "Skipping zip file: " + releaseAssetName.ToString());
         }
 
         public static void ProcessAssetDLL(JToken releaseAssetName, JToken releaseDownloadURL, List<ModInfo> modList)
@@ -133,10 +167,10 @@ namespace ModUpdater
                 {
                     string temporaryFilePath = Path.Combine(modsTemporaryDirectory, modInfo.FileInfo.Name);
 
-                    MelonLogger.Msg("Downloading temporary files for " + modInfo.FileInfo.Name + "...");
+                    MelonLogger.Msg(System.ConsoleColor.DarkGreen, "Downloading temporary files for " + modInfo.FileInfo.Name + "...");
                     Methods.DownloadFile(updaterClient, releaseDownloadURL.ToString(), temporaryFilePath);
 
-                    MelonInfoAttribute? tempModAttributes = Methods.GetMelonModAttributes(temporaryFilePath);
+                    MelonInfoAttribute? tempModAttributes = GetMelonModAttributes(temporaryFilePath);
                     if (tempModAttributes == null)
                     {
                         MelonLogger.Warning("Could not find MelonMod attributes for " + temporaryFilePath);
@@ -146,11 +180,11 @@ namespace ModUpdater
                     // do we already have the latest version?
                     if (!Methods.IsNewerVersion(modInfo.Version, tempModAttributes.Version))
                     {
-                        MelonLogger.Msg("Skipping update for " + modInfo.FileInfo.Name + ". Version " + tempModAttributes.Version + " is the latest.");
+                        MelonLogger.Msg(System.ConsoleColor.Blue, modInfo.FileInfo.Name + " is up-to-date. (Version: " + tempModAttributes.Version + ")");
                         continue;
                     }
 
-                    MelonLogger.Msg("Updating " + modInfo.FileInfo.Name + " to version " + tempModAttributes.Version + "...");
+                    MelonLogger.Msg(System.ConsoleColor.Cyan, "Updating " + modInfo.FileInfo.Name + " to version " + tempModAttributes.Version + "...");
 
                     Methods.MakeModBackup(modInfo.FileInfo, modInfo.Version);
                     System.IO.File.Copy(temporaryFilePath, modInfo.FileInfo.FullName, true);
@@ -180,14 +214,14 @@ namespace ModUpdater
             downloadStream.CopyTo(fileStream);
             fileStream.Dispose();
 
-            MelonLogger.Msg("Download of " + Path.GetFileName(fullPath) + " complete.");
+            MelonLogger.Msg(System.ConsoleColor.Green, "Download of " + Path.GetFileName(fullPath) + " complete.");
         }
 
         public static void MakeModBackup(FileInfo theMod, string theVersion)
         {
             if (!System.IO.Directory.Exists(modsBackupDirectory))
             {
-                MelonLogger.Msg("Creating backup directory at: " + modsBackupDirectory);
+                MelonLogger.Msg(System.ConsoleColor.DarkGreen, "Creating backup directory at: " + modsBackupDirectory);
                 System.IO.Directory.CreateDirectory(modsBackupDirectory);
             }
 
@@ -197,14 +231,14 @@ namespace ModUpdater
             {
                 if (ShouldOverwriteBackup(backupFilePath, theVersion))
                 {
-                    MelonLogger.Msg("Overwriting existing backup for " + theMod.Name);
+                    MelonLogger.Msg(System.ConsoleColor.DarkGreen, "Overwriting existing backup for " + theMod.Name);
                     System.IO.File.Delete(backupFilePath);
                     System.IO.File.Copy(theMod.FullName, backupFilePath, true);
                 }
             }
             else
             {
-                MelonLogger.Msg("Moving " + theMod.Name + " to backup directory");
+                MelonLogger.Msg(System.ConsoleColor.DarkGreen, "Moving " + theMod.Name + " to backup directory");
                 System.IO.File.Move(theMod.FullName, backupFilePath);
             }
         }
@@ -213,7 +247,7 @@ namespace ModUpdater
         {
             if (!System.IO.Directory.Exists(modsTemporaryDirectory))
             {
-                MelonLogger.Msg("Creating temporary directory at: " + modsTemporaryDirectory);
+                MelonLogger.Msg(System.ConsoleColor.DarkGreen, "Creating temporary directory at: " + modsTemporaryDirectory);
                 System.IO.Directory.CreateDirectory(modsTemporaryDirectory);
             }
             else
@@ -226,7 +260,7 @@ namespace ModUpdater
         {
             System.IO.DirectoryInfo tempDirectory = new DirectoryInfo(modsTemporaryDirectory);
             tempDirectory.Delete(true);
-            MelonLogger.Msg("Removed all temporary files.");
+            MelonLogger.Msg(System.ConsoleColor.DarkGreen, "Removed all temporary files.");
         }
 
         public static void RemoveTemporaryFiles()
@@ -275,7 +309,7 @@ namespace ModUpdater
 
                 if (modAttributes.DownloadLink == null)
                 {
-                    MelonLogger.Msg("No download URL found for " + thisMod.Name);
+                    MelonLogger.Msg(System.ConsoleColor.DarkYellow, "No download URL found for " + thisMod.Name);
                     continue;
                 }
 
