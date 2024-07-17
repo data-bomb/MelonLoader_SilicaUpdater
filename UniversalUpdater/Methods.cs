@@ -138,8 +138,14 @@ namespace ModUpdater
                                     // do we already have the latest version?
                                     if (!Methods.IsNewerVersion(modInfo.Version, tempModAttributes.Version))
                                     {
-                                        MelonLogger.Msg(System.ConsoleColor.Blue, modInfo.FileInfo.Name + " is up-to-date. (Version: " + modInfo.Version + ")");
-                                        continue;
+                                        if (IsNewerVersion(tempModAttributes.Version, modInfo.Version))
+                                        {
+                                            MelonLogger.Msg(System.ConsoleColor.Blue, modInfo.FileInfo.Name + " is newer than what is publicly available. (Version: " + tempModAttributes.Version + ")");
+                                        }
+                                        else
+                                        {
+                                            MelonLogger.Msg(System.ConsoleColor.Blue, modInfo.FileInfo.Name + " is up-to-date. (Version: " + tempModAttributes.Version + ")");
+                                        }
                                     }
 
                                     MelonLogger.Msg(System.ConsoleColor.Cyan, "Updating " + modInfo.FileInfo.Name + " to version " + tempModAttributes.Version + "...");
