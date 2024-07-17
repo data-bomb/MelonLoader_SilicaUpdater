@@ -42,7 +42,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json.Linq;
 
-[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.6", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
+[assembly: MelonInfo(typeof(Updater), "Universal Mod Updater", "2.0.7", "databomb", "https://github.com/data-bomb/MelonLoader_UniversalUpdater")]
 [assembly: MelonGame(null, null)]
 
 namespace UniversalUpdater
@@ -72,13 +72,14 @@ namespace UniversalUpdater
             try
             {
                 Methods.InitializeWebClient();
+
                 Dictionary<string, List<ModInfo>> modDownloadList = Methods.GenerateDownloadList();
                 Methods.InitializeTemporaryDirectory();
 
                 // loop through all unique download links
                 foreach (var thisDownloadTable in modDownloadList)
                 {
-                    List<ModInfo> modList = thisDownloadTable.Value;
+                    List<ModInfo> associatedMods = thisDownloadTable.Value;
 
                     // if it's github then process it
                     if (!Methods.IsGitHubLink(thisDownloadTable.Key))
@@ -107,39 +108,17 @@ namespace UniversalUpdater
                             continue;
                         }
 
-                        // see if we have any direct matches from the mod files
-                        foreach (var modInfo in modList)
+                        if (Methods.IsDllAsset(releaseDownloadURL.ToString()))
                         {
-                            if (string.Equals(releaseAssetName.ToString(), modInfo.FileInfo.Name, StringComparison.OrdinalIgnoreCase))
-                            {
-                                string temporaryFilePath = Path.Combine(modsTemporaryDirectory, modInfo.FileInfo.Name);
-
-                                MelonLogger.Msg("Downloading temporary files for " + modInfo.FileInfo.Name + "...");
-                                Methods.DownloadFile(updaterClient, releaseDownloadURL.ToString(), temporaryFilePath);
-
-                                MelonInfoAttribute? tempModAttributes = Methods.GetMelonModAttributes(temporaryFilePath);
-                                if (tempModAttributes == null)
-                                {
-                                    MelonLogger.Warning("Could not find MelonMod attributes for " + temporaryFilePath);
-                                    continue;
-                                }
-
-                                // do we already have the latest version?
-                                if (!Methods.IsNewerVersion(modInfo.Version, tempModAttributes.Version))
-                                {
-                                    MelonLogger.Msg("Skipping update for " + modInfo.FileInfo.Name + ". Version " + tempModAttributes.Version + " is the latest.");
-                                    continue;
-                                }
-
-                                MelonLogger.Msg("Updating " + modInfo.FileInfo.Name + " to version " + tempModAttributes.Version + "...");
-
-                                Methods.MakeModBackup(modInfo.FileInfo, modInfo.Version);
-                                System.IO.File.Copy(temporaryFilePath, modInfo.FileInfo.FullName, true);
-                            }
+                            Methods.ProcessAssetDLL(releaseAssetName, releaseDownloadURL, associatedMods);
+                            continue;
                         }
+
+                        MelonLogger.Msg("No asset handler for file type [" + releaseAssetName.ToString() + "]");
                     }
                 }
 
+                Methods.RemoveTemporaryFiles();
                 updaterClient.Dispose();
             }
             catch (Exception ex)

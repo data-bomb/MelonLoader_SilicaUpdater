@@ -104,9 +104,48 @@ namespace UniversalUpdater
             }
         }
 
+        public static void ProcessAssetDLL(JToken releaseAssetName, JToken releaseDownloadURL, List<ModInfo> modList)
+        {
+            // see if we have any direct matches from the mod files
+            foreach (var modInfo in modList)
+            {
+                if (string.Equals(releaseAssetName.ToString(), modInfo.FileInfo.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    string temporaryFilePath = Path.Combine(modsTemporaryDirectory, modInfo.FileInfo.Name);
+
+                    MelonLogger.Msg("Downloading temporary files for " + modInfo.FileInfo.Name + "...");
+                    Methods.DownloadFile(updaterClient, releaseDownloadURL.ToString(), temporaryFilePath);
+
+                    MelonInfoAttribute? tempModAttributes = Methods.GetMelonModAttributes(temporaryFilePath);
+                    if (tempModAttributes == null)
+                    {
+                        MelonLogger.Warning("Could not find MelonMod attributes for " + temporaryFilePath);
+                        continue;
+                    }
+
+                    // do we already have the latest version?
+                    if (!Methods.IsNewerVersion(modInfo.Version, tempModAttributes.Version))
+                    {
+                        MelonLogger.Msg("Skipping update for " + modInfo.FileInfo.Name + ". Version " + tempModAttributes.Version + " is the latest.");
+                        continue;
+                    }
+
+                    MelonLogger.Msg("Updating " + modInfo.FileInfo.Name + " to version " + tempModAttributes.Version + "...");
+
+                    Methods.MakeModBackup(modInfo.FileInfo, modInfo.Version);
+                    System.IO.File.Copy(temporaryFilePath, modInfo.FileInfo.FullName, true);
+                }
+            }
+        }
+
         public static bool IsZipAsset(string assetFile)
         {
             return assetFile.EndsWith(".zip");
+        }
+
+        public static bool IsDllAsset(string assetFile)
+        {
+            return assetFile.EndsWith(".dll");
         }
 
         public static void DownloadFile(HttpClient updaterClient, String fileURL, string fullPath)
@@ -159,12 +198,17 @@ namespace UniversalUpdater
             }
             else
             {
-                MelonLogger.Msg("Removing all files from temporary directory (" + modsTemporaryDirectory + ")");
-                System.IO.DirectoryInfo tempDirectory = new DirectoryInfo(modsTemporaryDirectory);
-                foreach (System.IO.FileInfo file in tempDirectory.GetFiles())
-                {
-                    file.Delete();
-                }
+                RemoveTemporaryFiles();
+            }
+        }
+
+        public static void RemoveTemporaryFiles()
+        {
+            MelonLogger.Msg("Removing all files from temporary directory.");
+            System.IO.DirectoryInfo tempDirectory = new DirectoryInfo(modsTemporaryDirectory);
+            foreach (System.IO.FileInfo file in tempDirectory.GetFiles())
+            {
+                file.Delete();
             }
         }
 
