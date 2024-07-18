@@ -42,7 +42,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json.Linq;
 
-[assembly: MelonInfo(typeof(Updater), "Mod Updater", "2.1.2", "databomb", "https://github.com/data-bomb/MelonLoader_Updater")]
+[assembly: MelonInfo(typeof(Updater), "Mod Updater", "2.1.3", "databomb", "https://github.com/data-bomb/MelonLoader_Updater")]
 [assembly: MelonGame(null, null)]
 
 namespace ModUpdater
