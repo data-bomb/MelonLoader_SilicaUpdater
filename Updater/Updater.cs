@@ -1,6 +1,6 @@
 ﻿/*
 Universal Mod Updater Plugin
-Copyright (C) 2023-2024 by databomb
+Copyright (C) 2023-2025 by databomb
 
 * Description *
 Checks each DLL file in the Mods\ directory for the assemblyInfo 
@@ -42,7 +42,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json.Linq;
 
-[assembly: MelonInfo(typeof(Updater), "Mod Updater", "2.1.3", "databomb", "https://github.com/data-bomb/MelonLoader_Updater")]
+[assembly: MelonInfo(typeof(Updater), "Mod Updater", "2.1.4", "databomb", "https://github.com/data-bomb/MelonLoader_Updater")]
 [assembly: MelonGame(null, null)]
 
 namespace ModUpdater
@@ -54,7 +54,8 @@ namespace ModUpdater
         public static readonly string modsTemporaryDirectory = Path.Combine(modsPath, @"temp\");
         public static HttpClient updaterClient = null!;
 
-        // initialize steam
+        // initialize steam (skip on Il2Cpp)
+        #if !NET6_0
         public override void OnPreInitialization()
         {
             try
@@ -69,6 +70,7 @@ namespace ModUpdater
                 MelonLogger.Warning(ex.ToString());
             }
         }
+        #endif
 
         public override void OnApplicationEarlyStart()
         {
