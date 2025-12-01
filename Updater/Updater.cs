@@ -42,7 +42,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json.Linq;
 
-[assembly: MelonInfo(typeof(Updater), "Mod Updater", "2.1.4", "databomb", "https://github.com/data-bomb/MelonLoader_Updater")]
+[assembly: MelonInfo(typeof(Updater), "Mod Updater", "2.2.0", "databomb", "https://github.com/data-bomb/MelonLoader_Updater")]
 [assembly: MelonGame(null, null)]
 
 namespace ModUpdater
@@ -50,8 +50,8 @@ namespace ModUpdater
     public class Updater : MelonPlugin
     {
         public static readonly string modsPath = MelonEnvironment.ModsDirectory;
-        public static readonly string modsBackupDirectory = Path.Combine(modsPath, @"backup\");
-        public static readonly string modsTemporaryDirectory = Path.Combine(modsPath, @"temp\");
+        public static readonly string modsBackupDirectory = Path.Combine(modsPath, @"~backup\");
+        public static readonly string modsTemporaryDirectory = Path.Combine(modsPath, @"~temp\");
         public static HttpClient updaterClient = null!;
 
         // initialize steam (skip on Il2Cpp)
