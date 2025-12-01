@@ -3,6 +3,8 @@
 **/bin/Debug/
 **/bin/Release/
 **/.vs/
+# ignore references
+**/MelonLoader/
 # ignore macos hidden files
 .DS_Store
 # ignore VSCode environment
