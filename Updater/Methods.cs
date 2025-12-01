@@ -1,6 +1,6 @@
 ﻿/*
 Universal Mod Updater Plugin
-Copyright (C) 2023-2024 by databomb
+Copyright (C) 2023-2025 by databomb
 
 * Description *
 Checks each DLL file in the Mods\ directory for the assemblyInfo 
@@ -133,6 +133,37 @@ namespace ModUpdater
             return true;
         }
 
+        private static void ProcessAssetZipFiles(JToken releaseAssetName, JToken releaseDownloadURL, List<ModInfo> modList)
+        {
+            MelonLogger.Msg(System.ConsoleColor.DarkGreen, "Downloading temporary zip file (" + releaseAssetName.ToString() + ") ...");
+
+            string temporaryFilePath = Path.Combine(modsTemporaryDirectory, releaseAssetName.ToString());
+            DownloadFile(updaterClient, releaseDownloadURL.ToString(), temporaryFilePath);
+
+            using (ZipArchive zip = ZipFile.Open(temporaryFilePath, ZipArchiveMode.Read))
+            {
+                foreach (ZipArchiveEntry entry in zip.Entries)
+                {
+                    foreach (var modInfo in modList)
+                    {
+                        if (string.Equals(entry.Name, modInfo.FileInfo.Name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            temporaryFilePath = Path.Combine(modsTemporaryDirectory, entry.Name);
+                            entry.ExtractToFile(temporaryFilePath);
+
+                            if (!ShouldUpdateFile(temporaryFilePath, modInfo))
+                            {
+                                continue;
+                            }
+
+                            Methods.MakeModBackup(modInfo.FileInfo, modInfo.Version);
+                            System.IO.File.Copy(temporaryFilePath, modInfo.FileInfo.FullName, true);
+                        }
+                    }
+                }
+            }
+        }
+
         public static void ProcessAssetZip(JToken releaseAssetName, JToken releaseDownloadURL, List<ModInfo> modList)
         {
             if (string.Equals(MelonLoader.InternalUtils.UnityInformationHandler.GameName, "Silica"))
@@ -140,39 +171,17 @@ namespace ModUpdater
                 if((MelonUtils.IsGameIl2Cpp() && releaseAssetName.ToString().StartsWith("Listen")) ||
                     (!MelonUtils.IsGameIl2Cpp() && releaseAssetName.ToString().StartsWith("Dedicated")))
                 {
-                    MelonLogger.Msg(System.ConsoleColor.DarkGreen, "Downloading temporary zip file (" + releaseAssetName.ToString() + ") ...");
-
-                    string temporaryFilePath = Path.Combine(modsTemporaryDirectory, releaseAssetName.ToString());
-                    DownloadFile(updaterClient, releaseDownloadURL.ToString(), temporaryFilePath);
-
-                    using (ZipArchive zip = ZipFile.Open(temporaryFilePath, ZipArchiveMode.Read))
-                    {
-                        foreach (ZipArchiveEntry entry in zip.Entries)
-                        {
-                            foreach (var modInfo in modList)
-                            {
-                                if (string.Equals(entry.Name, modInfo.FileInfo.Name, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    temporaryFilePath = Path.Combine(modsTemporaryDirectory, entry.Name);
-                                    entry.ExtractToFile(temporaryFilePath);
-
-                                    if (!ShouldUpdateFile(temporaryFilePath, modInfo))
-                                    {
-                                        continue;
-                                    }
-
-                                    Methods.MakeModBackup(modInfo.FileInfo, modInfo.Version);
-                                    System.IO.File.Copy(temporaryFilePath, modInfo.FileInfo.FullName, true);
-                                }
-                            }
-                        }
-                    }
-                        
-                    return;
+                    ProcessAssetZipFiles(releaseAssetName, releaseDownloadURL, modList);
+                }
+                else
+                {
+                    MelonLogger.Msg(System.ConsoleColor.Blue, "Skipping zip file: " + releaseAssetName.ToString());
                 }
             }
-
-            MelonLogger.Msg(System.ConsoleColor.Blue, "Skipping zip file: " + releaseAssetName.ToString());
+            else
+            {
+                ProcessAssetZipFiles(releaseAssetName, releaseDownloadURL, modList);
+            }
         }
 
         public static void ProcessAssetDLL(JToken releaseAssetName, JToken releaseDownloadURL, List<ModInfo> modList)
